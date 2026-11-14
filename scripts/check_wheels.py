@@ -201,7 +201,7 @@ def main(argv=None) -> int:
         "wheels", nargs="*", type=Path, help="default: dist/*.whl"
     )
     args = parser.parse_args(argv)
-    wheels = args.wheels or sorted((lines.ROOT / "dist").glob("*.whl"))
+    wheels = args.wheels or sorted((lines.REPOROOT / "dist").glob("*.whl"))
     if not wheels:
         parser.error("no wheels given and none in dist/")
     data = lines.load()

@@ -26,34 +26,39 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+REPOROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPOROOT / "src"))
 
 from fast_nvim_release.platforms import (  # noqa: E402
     OLD_GLIBC_TAGS,
     PLATFORMS,
     Platform,
+    PlatformKey,
 )
 
-LINES_FILE = ROOT / "lines.json"
+LINES_FILE = REPOROOT / "lines.json"
 #: where fetch_nvim.py unpacks a build, and where the tracked licenses live
-NVIM_DIR = ROOT / "src" / "fast_nvim_release" / "_nvim"
-REPOS = {"official": "neovim/neovim", "old_glibc": "neovim/neovim-releases"}
+NVIM_DIR = REPOROOT / "src" / "fast_nvim_release" / "_nvim"
+BuildKind = Literal["official", "old_glibc"]
+REPOS: Dict[BuildKind, str] = {
+    "official": "neovim/neovim",
+    "old_glibc": "neovim/neovim-releases",
+}
 
 
 @dataclass(frozen=True)
 class Build:
-    kind: str  #: ``official`` or ``old_glibc``
+    kind: BuildKind
     version: str  #: the Neovim release, e.g. ``v0.12.6``
-    sha256: Dict[str, str]  #: platform key -> archive checksum
+    sha256: Dict[PlatformKey, str]  #: platform key -> archive checksum
 
     @property
     def repo(self) -> str:
         return REPOS[self.kind]
 
-    def url(self, platform_key: str) -> str:
+    def url(self, platform_key: PlatformKey) -> str:
         asset = PLATFORMS[platform_key].asset
         return f"https://github.com/{self.repo}/releases/download/{self.version}/{asset}"
 

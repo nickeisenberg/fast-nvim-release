@@ -30,7 +30,7 @@ from lines import Wheel
 
 from fast_nvim_release.platforms import host_wheel_tag
 
-NVIM = lines.NVIM_DIR.relative_to(lines.ROOT)
+NVIM = lines.NVIM_DIR.relative_to(lines.REPOROOT)
 IGNORE = shutil.ignore_patterns(
     "_nvim",
     ".git",
@@ -84,7 +84,7 @@ def build(wheel: Wheel, outdir: Path) -> Path:
     print(f"==> {wheel.label}", flush=True)
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "src-tree"
-        shutil.copytree(lines.ROOT, work, ignore=IGNORE)
+        shutil.copytree(lines.REPOROOT, work, ignore=IGNORE)
         (work / NVIM).mkdir()
         license_file = lines.NVIM_DIR / lines.license_name(wheel.line)
         if license_file.is_file():  # else fetch_nvim.py downloads it
@@ -125,7 +125,7 @@ def main(argv=None) -> int:
         "--wheel", action="append", default=[], help='a wheel tag, or "host"'
     )
     parser.add_argument("--skip-published", default="", metavar="INDEX_URL")
-    parser.add_argument("--outdir", type=Path, default=lines.ROOT / "dist")
+    parser.add_argument("--outdir", type=Path, default=lines.REPOROOT / "dist")
     args = parser.parse_args(argv)
     if not (args.all or args.line or args.wheel):
         parser.error("pass --all, or --line/--wheel")

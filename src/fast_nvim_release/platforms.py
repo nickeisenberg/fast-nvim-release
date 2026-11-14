@@ -17,12 +17,22 @@ import platform
 import re
 import sys
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Literal, Optional, Tuple, cast
+
+#: The platforms Neovim publishes builds for.
+PlatformKey = Literal[
+    "linux-x86_64",
+    "linux-arm64",
+    "macos-x86_64",
+    "macos-arm64",
+    "windows-x86_64",
+    "windows-arm64",
+]
 
 
 @dataclass(frozen=True)
 class Platform:
-    key: str  #: e.g. ``linux-x86_64``
+    key: PlatformKey  #: e.g. ``linux-x86_64``
     asset: str  #: release archive name on GitHub
     exe: str  #: the Neovim executable
     wheel_tag: str  #: platform tag of the wheel with the official build
@@ -33,7 +43,7 @@ class Platform:
         return self.asset.split(".")[0]
 
 
-PLATFORMS: Dict[str, Platform] = {
+PLATFORMS: Dict[PlatformKey, Platform] = {
     p.key: p
     for p in (
         Platform(
@@ -69,7 +79,7 @@ PLATFORMS: Dict[str, Platform] = {
 
 #: Tags of the wheels with the glibc 2.17 builds.  They also name
 #: ``manylinux2014`` so that pip before 20.3 (RHEL 8's python39) recognises them.
-OLD_GLIBC_TAGS: Dict[str, str] = {
+OLD_GLIBC_TAGS: Dict[PlatformKey, str] = {
     "linux-x86_64": "manylinux_2_17_x86_64.manylinux2014_x86_64",
     "linux-arm64": "manylinux_2_17_aarch64.manylinux2014_aarch64",
 }
@@ -99,7 +109,7 @@ def host_platform() -> Optional[Platform]:
         arch = "x86_64"
     else:
         return None
-    return PLATFORMS[f"{family}-{arch}"]
+    return PLATFORMS[cast(PlatformKey, f"{family}-{arch}")]
 
 
 def host_glibc() -> Optional[Tuple[int, int]]:
