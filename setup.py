@@ -25,7 +25,13 @@ try:  # setuptools >= 70.1 ships the command itself
 except ImportError:  # pragma: no cover - older toolchains
     from wheel.bdist_wheel import bdist_wheel
 
-BUILD_JSON = Path(__file__).resolve().parent / "src" / "fast_nvim_release" / "_nvim" / "build.json"
+BUILD_JSON = (
+    Path(__file__).resolve().parent
+    / "src"
+    / "fast_nvim_release"
+    / "_nvim"
+    / "build.json"
+)
 
 
 def build_info() -> dict:
@@ -48,17 +54,25 @@ class PlatformWheel(bdist_wheel):
 
     def run(self):
         if not build_info():
-            raise SystemExit(f"no Neovim build in {BUILD_JSON.parent}; run scripts/fetch_nvim.py")
+            raise SystemExit(
+                f"no Neovim build in {BUILD_JSON.parent}; run scripts/fetch_nvim.py"
+            )
         super().run()
 
 
 class SourceDist(sdist):
     """An sdist never carries the vendored binaries, only the tracked files."""
 
-    VENDORED = re.compile(r"^src/fast_nvim_release/_nvim/(?!LICENSE\.nvim-[^/]+\.txt$|\.gitkeep$)")
+    VENDORED = re.compile(
+        r"^src/fast_nvim_release/_nvim/(?!LICENSE\.nvim-[^/]+\.txt$|\.gitkeep$)"
+    )
 
     def make_release_tree(self, base_dir, files):
-        kept = [name for name in files if not self.VENDORED.match(name.replace(os.sep, "/"))]
+        kept = [
+            name
+            for name in files
+            if not self.VENDORED.match(name.replace(os.sep, "/"))
+        ]
         super().make_release_tree(base_dir, kept)
 
 

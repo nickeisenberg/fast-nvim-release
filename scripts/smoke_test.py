@@ -26,10 +26,16 @@ ENV = {k: v for k, v in os.environ.items() if k not in ("VIMRUNTIME", "VIM")}
 def run(*cmd, ok: bool = True) -> str:
     print("$", *cmd, flush=True)
     result = subprocess.run(
-        [str(part) for part in cmd], capture_output=True, text=True, timeout=300, env=ENV
+        [str(part) for part in cmd],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        env=ENV,
     )
     if (result.returncode == 0) != ok:
-        raise SystemExit(f"FAILED (exit {result.returncode}):\n{result.stdout}{result.stderr}")
+        raise SystemExit(
+            f"FAILED (exit {result.returncode}):\n{result.stdout}{result.stderr}"
+        )
     return result.stdout + result.stderr
 
 
@@ -43,7 +49,10 @@ def smoke(wheel: Path) -> None:
         venv.create(work / "venv", with_pip=True)
         scripts = work / "venv" / ("Scripts" if os.name == "nt" else "bin")
         suffix = ".exe" if os.name == "nt" else ""
-        python, cli = scripts / f"python{suffix}", scripts / f"fast-nvim-release{suffix}"
+        python, cli = (
+            scripts / f"python{suffix}",
+            scripts / f"fast-nvim-release{suffix}",
+        )
         run(python, "-m", "pip", "install", "--no-deps", "-q", wheel)
 
         out = run(cli, "--version")
@@ -58,7 +67,10 @@ def smoke(wheel: Path) -> None:
 
 
 def main(argv=None) -> int:
-    wheels = [Path(name).resolve() for name in (sys.argv[1:] if argv is None else argv)]
+    wheels = [
+        Path(name).resolve()
+        for name in (sys.argv[1:] if argv is None else argv)
+    ]
     if not wheels:
         raise SystemExit("usage: smoke_test.py WHEEL [WHEEL...]")
     for wheel in wheels:

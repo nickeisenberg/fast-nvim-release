@@ -56,13 +56,19 @@ def cpu(binary: bytes) -> Optional[str]:
     """The CPU a little-endian ELF, thin 64-bit Mach-O or PE executable is built for."""
     try:
         if binary[:4] == b"\x7fELF":
-            return MACHINES.get(("elf", struct.unpack_from("<H", binary, 18)[0]))
+            return MACHINES.get(
+                ("elf", struct.unpack_from("<H", binary, 18)[0])
+            )
         if binary[:4] == b"\xcf\xfa\xed\xfe":
-            return MACHINES.get(("macho", struct.unpack_from("<I", binary, 4)[0]))
+            return MACHINES.get(
+                ("macho", struct.unpack_from("<I", binary, 4)[0])
+            )
         if binary[:2] == b"MZ":
             offset = struct.unpack_from("<I", binary, 0x3C)[0]
             if binary[offset : offset + 4] == b"PE\0\0":
-                return MACHINES.get(("pe", struct.unpack_from("<H", binary, offset + 4)[0]))
+                return MACHINES.get(
+                    ("pe", struct.unpack_from("<H", binary, offset + 4)[0])
+                )
     except struct.error:
         pass
     return None
@@ -104,7 +110,9 @@ def check(path: Path, data: Optional[dict] = None) -> List[str]:
     except KeyError as exc:
         return [exc.args[0]]
     if version != spec.version:
-        return [f"version {version}, but lines.json says {spec.version} for {tag}"]
+        return [
+            f"version {version}, but lines.json says {spec.version} for {tag}"
+        ]
 
     problems = []
     with zipfile.ZipFile(path) as wheel:
@@ -121,17 +129,25 @@ def check(path: Path, data: Optional[dict] = None) -> List[str]:
         if info != expected:
             problems.append(f"build.json is {info}, expected {expected}")
         exe = f"{PAYLOAD}bin/{spec.platform.exe}"
-        runtime = sum(1 for name in names if name.startswith(f"{PAYLOAD}share/nvim/runtime/"))
+        runtime = sum(
+            1
+            for name in names
+            if name.startswith(f"{PAYLOAD}share/nvim/runtime/")
+        )
         if runtime < MIN_RUNTIME_FILES:
             problems.append(f"only {runtime} runtime files")
         license_file = f"{PAYLOAD}{lines.license_name(line)}"
         if license_file not in names:
             problems.append(f"missing {license_file}")
         others = sorted(
-            n for n in names if n.startswith(f"{PAYLOAD}LICENSE.nvim-") and n != license_file
+            n
+            for n in names
+            if n.startswith(f"{PAYLOAD}LICENSE.nvim-") and n != license_file
         )
         if others:
-            problems.append(f"carries other lines' licenses: {', '.join(others)}")
+            problems.append(
+                f"carries other lines' licenses: {', '.join(others)}"
+            )
         if exe not in names:
             problems.append(f"missing {exe}")
         else:
@@ -142,25 +158,35 @@ def check(path: Path, data: Optional[dict] = None) -> List[str]:
             arch = spec.platform.key.rsplit("-", 1)[1]
             built_for = cpu(binary)
             if built_for != arch:
-                problems.append(f"{exe} is built for {built_for or 'an unknown CPU'}, not {arch}")
+                problems.append(
+                    f"{exe} is built for {built_for or 'an unknown CPU'}, not {arch}"
+                )
             manylinux = MANYLINUX.match(tag)
             if manylinux:
                 promised = (int(manylinux.group(1)), int(manylinux.group(2)))
                 needed = glibc_floor(binary)
                 if needed is None or needed > promised:
-                    problems.append(f"{exe} needs glibc {needed}, the tag promises {promised}")
+                    problems.append(
+                        f"{exe} needs glibc {needed}, the tag promises {promised}"
+                    )
             macosx = MACOSX.match(tag)
             if macosx:
                 promised = (int(macosx.group(1)), int(macosx.group(2)))
                 needed = macos_floor(binary)
                 if needed is None or needed > promised:
-                    problems.append(f"{exe} needs macOS {needed}, the tag promises {promised}")
+                    problems.append(
+                        f"{exe} needs macOS {needed}, the tag promises {promised}"
+                    )
 
         meta = next((n for n in names if n.endswith(".dist-info/WHEEL")), None)
         text = wheel.read(meta).decode() if meta else ""
-        tags_ok = all(f"Tag: py3-none-{part}" in text for part in tag.split("."))
+        tags_ok = all(
+            f"Tag: py3-none-{part}" in text for part in tag.split(".")
+        )
         if "Root-Is-Purelib: false" not in text or not tags_ok:
-            problems.append("WHEEL metadata is not a py3-none platform wheel for this tag")
+            problems.append(
+                "WHEEL metadata is not a py3-none platform wheel for this tag"
+            )
         if not any(n.endswith(".dist-info/entry_points.txt") for n in names):
             problems.append("missing the console script entry point")
 
@@ -171,7 +197,9 @@ def check(path: Path, data: Optional[dict] = None) -> List[str]:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("wheels", nargs="*", type=Path, help="default: dist/*.whl")
+    parser.add_argument(
+        "wheels", nargs="*", type=Path, help="default: dist/*.whl"
+    )
     args = parser.parse_args(argv)
     wheels = args.wheels or sorted((lines.ROOT / "dist").glob("*.whl"))
     if not wheels:

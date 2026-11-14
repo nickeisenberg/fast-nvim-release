@@ -28,7 +28,9 @@ def entries(wheels: List[Path]) -> Dict[str, List[str]]:
     for wheel in sorted(wheels):
         with zipfile.ZipFile(wheel) as zf:
             info = json.loads(zf.read("fast_nvim_release/_nvim/build.json"))
-        found[info["version"]].append(f"- `{info['tag']}`: Neovim {info['neovim']}")
+        found[info["version"]].append(
+            f"- `{info['tag']}`: Neovim {info['neovim']}"
+        )
     return dict(found)
 
 
@@ -44,7 +46,10 @@ def body(version: str, items: List[str]) -> str:
 
 def notes(wheels: List[Path]) -> Dict[str, str]:
     """version -> release notes (markdown) for a new release."""
-    return {version: body(version, items) for version, items in entries(wheels).items()}
+    return {
+        version: body(version, items)
+        for version, items in entries(wheels).items()
+    }
 
 
 def existing_notes(tag: str) -> Optional[str]:
@@ -67,7 +72,16 @@ def main(argv=None) -> int:
             continue
         old = existing_notes(tag)
         if old is None:
-            cmd = ["gh", "release", "create", tag, "--title", tag, "--notes", body(version, items)]
+            cmd = [
+                "gh",
+                "release",
+                "create",
+                tag,
+                "--title",
+                tag,
+                "--notes",
+                body(version, items),
+            ]
             cmd += ["--target", os.environ.get("GITHUB_SHA", "HEAD")]
         else:
             cmd = [

@@ -51,7 +51,9 @@ def test_setup_takes_no_release_argument(fake_bundle, prefix, capsys):
     assert excinfo.value.code == 2
 
 
-def test_setup_refuses_foreign_files_without_force(fake_bundle, host, prefix, capsys):
+def test_setup_refuses_foreign_files_without_force(
+    fake_bundle, host, prefix, capsys
+):
     (prefix / "bin").mkdir(parents=True)
     (prefix / "bin" / host.exe).write_text("mine", encoding="utf-8")
     assert main(["setup", "--prefix", str(prefix)]) == 1
@@ -77,7 +79,9 @@ def launched(monkeypatch):
         return 0
 
     monkeypatch.setattr(cli.os, "execv", fake_exec)
-    monkeypatch.setattr(cli.subprocess, "call", lambda argv: fake_exec(argv[0], argv))
+    monkeypatch.setattr(
+        cli.subprocess, "call", lambda argv: fake_exec(argv[0], argv)
+    )
     return calls
 
 

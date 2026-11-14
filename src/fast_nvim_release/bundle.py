@@ -42,10 +42,16 @@ class FastNvimError(RuntimeError):
 def build_info() -> Dict[str, str]:
     """``build.json``: the line, Neovim version, platform and tag of this wheel."""
     try:
-        data = json.loads((BUNDLE_ROOT / "build.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (BUNDLE_ROOT / "build.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return {}
-    return {k: v for k, v in data.items() if isinstance(v, str)} if isinstance(data, dict) else {}
+    return (
+        {k: v for k, v in data.items() if isinstance(v, str)}
+        if isinstance(data, dict)
+        else {}
+    )
 
 
 def bundled_platform() -> Platform:
@@ -81,7 +87,9 @@ def normalize(path: Union[str, os.PathLike]) -> Path:
 def default_prefix() -> Path:
     """Where ``path`` looks when no ``--prefix`` is given (``setup`` has no default)."""
     if os.name == "nt":
-        base = os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
+        base = (
+            os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
+        )
         return normalize(Path(base) / "fast-nvim-release")
     return normalize(Path.home() / ".local")
 
@@ -162,10 +170,15 @@ def install(prefix: Path, *, force: bool = False) -> Path:
             prefix / "bin" / name
             for name in names
             if os.path.normcase(name) not in owned_keys
-            and ((prefix / "bin" / name).exists() or (prefix / "bin" / name).is_symlink())
+            and (
+                (prefix / "bin" / name).exists()
+                or (prefix / "bin" / name).is_symlink()
+            )
         ]
         if not managed:
-            foreign += [prefix / part for part in PARTS[1:] if (prefix / part).exists()]
+            foreign += [
+                prefix / part for part in PARTS[1:] if (prefix / part).exists()
+            ]
         if foreign:
             raise FastNvimError(
                 "not installed by fast-nvim-release, so not overwritten:\n  "
@@ -191,20 +204,38 @@ def install(prefix: Path, *, force: bool = False) -> Path:
 
 
 #: ``-i NONE`` keeps Neovim from reading and rewriting the user's shada file.
-PROBE_ARGS = ("-u", "NONE", "-i", "NONE", "--headless", "+lua io.write(vim.env.VIMRUNTIME)", "+q")
+PROBE_ARGS = (
+    "-u",
+    "NONE",
+    "-i",
+    "NONE",
+    "--headless",
+    "+lua io.write(vim.env.VIMRUNTIME)",
+    "+q",
+)
 
 
 def verify(exe: Path, prefix: Path) -> None:
     """Start the installed Neovim and check that it found the prefix's runtime."""
     # $VIMRUNTIME / $VIM would override where Neovim looks for its runtime
-    env = {k: v for k, v in os.environ.items() if k not in ("VIMRUNTIME", "VIM")}
+    env = {
+        k: v for k, v in os.environ.items() if k not in ("VIMRUNTIME", "VIM")
+    }
     try:
-        result = subprocess.run([str(exe), *PROBE_ARGS], capture_output=True, timeout=60, env=env)
+        result = subprocess.run(
+            [str(exe), *PROBE_ARGS], capture_output=True, timeout=60, env=env
+        )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise FastNvimError(f"installed, but {exe} does not run: {exc}") from exc
+        raise FastNvimError(
+            f"installed, but {exe} does not run: {exc}"
+        ) from exc
     reported = result.stdout.decode("utf-8", "replace").strip()
     expected = (prefix / "share" / "nvim" / "runtime").resolve()
-    if result.returncode != 0 or not reported or Path(reported).resolve() != expected:
+    if (
+        result.returncode != 0
+        or not reported
+        or Path(reported).resolve() != expected
+    ):
         detail = result.stderr.decode("utf-8", "replace").strip()
         raise FastNvimError(
             f"installed, but {exe} did not start with the runtime in {expected}"

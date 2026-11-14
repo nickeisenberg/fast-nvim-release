@@ -40,7 +40,11 @@ TRACKED = (".gitkeep",)
 
 def cache_dir() -> Path:
     override = os.environ.get("FAST_NVIM_RELEASE_CACHE_DIR")
-    return Path(override).expanduser() if override else Path.home() / ".cache" / "fast-nvim-release"
+    return (
+        Path(override).expanduser()
+        if override
+        else Path.home() / ".cache" / "fast-nvim-release"
+    )
 
 
 def sha256(path: Path) -> str:
@@ -52,10 +56,15 @@ def sha256(path: Path) -> str:
 
 
 def download(url: str, dest: Path) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "fast-nvim-release-build"})
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "fast-nvim-release-build"}
+    )
     partial = dest.with_name(dest.name + ".part")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(request, timeout=60) as response, partial.open("wb") as out:
+    with (
+        urllib.request.urlopen(request, timeout=60) as response,
+        partial.open("wb") as out,
+    ):
         shutil.copyfileobj(response, out)
     os.replace(partial, dest)
 
@@ -96,14 +105,18 @@ def unpack(source: Path, platform: Platform, dest: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         if platform.asset.endswith(".zip"):
             with zipfile.ZipFile(source) as zf:
-                zf.extractall(tmp)  # zipfile never writes outside tmp or creates links
+                zf.extractall(
+                    tmp
+                )  # zipfile never writes outside tmp or creates links
         else:
             with tarfile.open(source) as tar:
                 # "data" rejects absolute paths, links leaving tmp, devices, setuid bits
                 tar.extractall(tmp, filter="data")
         root = Path(tmp) / platform.archive_dir
         if not (root / "bin" / platform.exe).is_file():
-            raise SystemExit(f"{source.name} has no {platform.archive_dir}/bin/{platform.exe}")
+            raise SystemExit(
+                f"{source.name} has no {platform.archive_dir}/bin/{platform.exe}"
+            )
         for part in PARTS:
             if (root / part).is_dir():
                 (dest / part).parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +124,9 @@ def unpack(source: Path, platform: Platform, dest: Path) -> None:
 
 
 def check_runs(exe: Path, version: str) -> None:
-    result = subprocess.run([str(exe), "--version"], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(
+        [str(exe), "--version"], capture_output=True, text=True, timeout=60
+    )
     first = (result.stdout.splitlines() or [""])[0]
     if result.returncode or version not in first:
         reason = result.stderr.strip() or f"it printed {first!r}"
@@ -130,7 +145,9 @@ def runs_here(wheel: Wheel) -> bool:
 
 
 def fetch(wheel: Wheel, dest: Path = DEST) -> None:
-    print(f"{wheel.version}: Neovim {wheel.build.version} ({wheel.build.repo}) for {wheel.tag}")
+    print(
+        f"{wheel.version}: Neovim {wheel.build.version} ({wheel.build.repo}) for {wheel.tag}"
+    )
     source = archive(wheel.build, wheel.platform)
     dest.mkdir(parents=True, exist_ok=True)
     clear(dest)
@@ -142,7 +159,9 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
         "platform": wheel.platform.key,
         "tag": wheel.tag,
     }
-    (dest / "build.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
+    (dest / "build.json").write_text(
+        json.dumps(info, indent=2) + "\n", encoding="utf-8"
+    )
     if runs_here(wheel):
         check_runs(dest / "bin" / wheel.platform.exe, wheel.build.version)
     license_file = dest / lines.license_name(wheel.line)
@@ -153,12 +172,20 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
 def main(argv=None) -> int:
     data = lines.load()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--line", choices=list(data["lines"]), default=lines.newest_line(data))
-    parser.add_argument("--wheel", help="wheel platform tag (default: the one pip picks here)")
-    parser.add_argument("--dest", type=Path, default=DEST, help=f"default: {DEST}")
+    parser.add_argument(
+        "--line", choices=list(data["lines"]), default=lines.newest_line(data)
+    )
+    parser.add_argument(
+        "--wheel", help="wheel platform tag (default: the one pip picks here)"
+    )
+    parser.add_argument(
+        "--dest", type=Path, default=DEST, help=f"default: {DEST}"
+    )
     args = parser.parse_args(argv)
     if not hasattr(tarfile, "data_filter"):
-        raise SystemExit("needs tarfile extraction filters (Python 3.12+, or 3.9.17+/3.10.12+)")
+        raise SystemExit(
+            "needs tarfile extraction filters (Python 3.12+, or 3.9.17+/3.10.12+)"
+        )
     tag = args.wheel or host_wheel_tag()
     if tag is None:
         raise SystemExit("cannot detect this platform; pass --wheel")

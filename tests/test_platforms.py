@@ -44,12 +44,18 @@ def test_host_platform(monkeypatch, system, machine, key):
     [
         ("x86_64", (2, 39), "manylinux_2_34_x86_64"),
         ("x86_64", (2, 34), "manylinux_2_34_x86_64"),
-        ("x86_64", (2, 28), "manylinux_2_17_x86_64.manylinux2014_x86_64"),  # RHEL 8
+        (
+            "x86_64",
+            (2, 28),
+            "manylinux_2_17_x86_64.manylinux2014_x86_64",
+        ),  # RHEL 8
         ("aarch64", (2, 28), "manylinux_2_17_aarch64.manylinux2014_aarch64"),
         ("x86_64", None, "manylinux_2_34_x86_64"),  # glibc unknown (e.g. musl)
     ],
 )
-def test_the_wheel_for_this_machine_follows_glibc_like_pip(monkeypatch, machine, glibc, tag):
+def test_the_wheel_for_this_machine_follows_glibc_like_pip(
+    monkeypatch, machine, glibc, tag
+):
     monkeypatch.setattr(platforms.sys, "platform", "linux")
     monkeypatch.setattr(platforms.platform, "machine", lambda: machine)
     monkeypatch.setattr(platforms, "host_glibc", lambda: glibc)

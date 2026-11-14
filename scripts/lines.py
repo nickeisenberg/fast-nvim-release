@@ -31,7 +31,11 @@ from typing import Dict, List, Optional, Tuple
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS, Platform  # noqa: E402
+from fast_nvim_release.platforms import (  # noqa: E402
+    OLD_GLIBC_TAGS,
+    PLATFORMS,
+    Platform,
+)
 
 LINES_FILE = ROOT / "lines.json"
 #: where fetch_nvim.py unpacks a build, and where the tracked licenses live
@@ -90,7 +94,9 @@ def load(path: Path = LINES_FILE) -> dict:
 
 
 def save(data: dict, path: Path = LINES_FILE) -> None:
-    path.write_text(json.dumps(_ordered(data), indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(_ordered(data), indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def license_name(line: str) -> str:
@@ -131,7 +137,11 @@ def wheels(data: Optional[dict] = None) -> List[Wheel]:
             for key, platform in PLATFORMS.items():
                 if key not in build.sha256:
                     continue
-                tag = platform.wheel_tag if build.kind == "official" else OLD_GLIBC_TAGS[key]
+                tag = (
+                    platform.wheel_tag
+                    if build.kind == "official"
+                    else OLD_GLIBC_TAGS[key]
+                )
                 found.append(Wheel(line, version, tag, platform, build))
     return found
 
@@ -142,5 +152,7 @@ def find(line: str, tag: str, data: Optional[dict] = None) -> Wheel:
     for wheel in candidates:
         if wheel.tag == tag:
             return wheel
-    have = ", ".join(wheel.tag for wheel in candidates) or "none (unknown line)"
+    have = (
+        ", ".join(wheel.tag for wheel in candidates) or "none (unknown line)"
+    )
     raise KeyError(f"Neovim {line} has no build for {tag} (it has: {have})")

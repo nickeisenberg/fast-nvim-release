@@ -32,7 +32,15 @@ from fast_nvim_release.platforms import host_wheel_tag
 
 NVIM = lines.NVIM_DIR.relative_to(lines.ROOT)
 IGNORE = shutil.ignore_patterns(
-    "_nvim", ".git", "build", "dist", "*.egg-info", "__pycache__", ".*cache", ".venv", "venv"
+    "_nvim",
+    ".git",
+    "build",
+    "dist",
+    "*.egg-info",
+    "__pycache__",
+    ".*cache",
+    ".venv",
+    "venv",
 )
 
 
@@ -49,17 +57,21 @@ def published(index: str, version: str) -> Set[str]:
     return {entry["filename"] for entry in release.get("urls", [])}
 
 
-def select(line_keys: List[str], tags: List[str], skip_published: str = "") -> List[Wheel]:
+def select(
+    line_keys: List[str], tags: List[str], skip_published: str = ""
+) -> List[Wheel]:
     host = host_wheel_tag()
     wanted_tags = {host if tag == "host" else tag for tag in tags}
     chosen = [
         wheel
         for wheel in lines.wheels()
-        if (not line_keys or wheel.line in line_keys) and (not tags or wheel.tag in wanted_tags)
+        if (not line_keys or wheel.line in line_keys)
+        and (not tags or wheel.tag in wanted_tags)
     ]
     if skip_published:
         on_index: Dict[str, Set[str]] = {
-            version: published(skip_published, version) for version in {w.version for w in chosen}
+            version: published(skip_published, version)
+            for version in {w.version for w in chosen}
         }
         for wheel in chosen:
             if wheel.filename in on_index[wheel.version]:
@@ -87,7 +99,14 @@ def build(wheel: Wheel, outdir: Path) -> Path:
         ]
         subprocess.run(fetch, cwd=work, check=True)
         built = Path(tmp) / "dist"
-        cmd = [sys.executable, "-m", "build", "--wheel", "--outdir", str(built)]
+        cmd = [
+            sys.executable,
+            "-m",
+            "build",
+            "--wheel",
+            "--outdir",
+            str(built),
+        ]
         subprocess.run(cmd, cwd=work, check=True, stdout=subprocess.DEVNULL)
         (result,) = built.glob("*.whl")
         outdir.mkdir(parents=True, exist_ok=True)
@@ -96,9 +115,15 @@ def build(wheel: Wheel, outdir: Path) -> Path:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--all", action="store_true", help="every line and wheel")
-    parser.add_argument("--line", action="append", default=[], help="a line, e.g. 0.12")
-    parser.add_argument("--wheel", action="append", default=[], help='a wheel tag, or "host"')
+    parser.add_argument(
+        "--all", action="store_true", help="every line and wheel"
+    )
+    parser.add_argument(
+        "--line", action="append", default=[], help="a line, e.g. 0.12"
+    )
+    parser.add_argument(
+        "--wheel", action="append", default=[], help='a wheel tag, or "host"'
+    )
     parser.add_argument("--skip-published", default="", metavar="INDEX_URL")
     parser.add_argument("--outdir", type=Path, default=lines.ROOT / "dist")
     args = parser.parse_args(argv)

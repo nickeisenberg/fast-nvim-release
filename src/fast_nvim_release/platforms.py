@@ -36,12 +36,34 @@ class Platform:
 PLATFORMS: Dict[str, Platform] = {
     p.key: p
     for p in (
-        Platform("linux-x86_64", "nvim-linux-x86_64.tar.gz", "nvim", "manylinux_2_34_x86_64"),
-        Platform("linux-arm64", "nvim-linux-arm64.tar.gz", "nvim", "manylinux_2_34_aarch64"),
-        Platform("macos-x86_64", "nvim-macos-x86_64.tar.gz", "nvim", "macosx_11_0_x86_64"),
-        Platform("macos-arm64", "nvim-macos-arm64.tar.gz", "nvim", "macosx_11_0_arm64"),
+        Platform(
+            "linux-x86_64",
+            "nvim-linux-x86_64.tar.gz",
+            "nvim",
+            "manylinux_2_34_x86_64",
+        ),
+        Platform(
+            "linux-arm64",
+            "nvim-linux-arm64.tar.gz",
+            "nvim",
+            "manylinux_2_34_aarch64",
+        ),
+        Platform(
+            "macos-x86_64",
+            "nvim-macos-x86_64.tar.gz",
+            "nvim",
+            "macosx_11_0_x86_64",
+        ),
+        Platform(
+            "macos-arm64",
+            "nvim-macos-arm64.tar.gz",
+            "nvim",
+            "macosx_11_0_arm64",
+        ),
         Platform("windows-x86_64", "nvim-win64.zip", "nvim.exe", "win_amd64"),
-        Platform("windows-arm64", "nvim-win-arm64.zip", "nvim.exe", "win_arm64"),
+        Platform(
+            "windows-arm64", "nvim-win-arm64.zip", "nvim.exe", "win_arm64"
+        ),
     )
 }
 
@@ -100,6 +122,10 @@ def host_wheel_tag() -> Optional[str]:
     if here is None:
         return None
     glibc = host_glibc()
-    if here.key in OLD_GLIBC_TAGS and glibc is not None and glibc < OFFICIAL_LINUX_GLIBC:
+    if (
+        here.key in OLD_GLIBC_TAGS
+        and glibc is not None
+        and glibc < OFFICIAL_LINUX_GLIBC
+    ):
         return OLD_GLIBC_TAGS[here.key]
     return here.wheel_tag

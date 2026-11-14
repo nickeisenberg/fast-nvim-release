@@ -25,7 +25,8 @@ from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS
 LINUX = PLATFORMS["linux-x86_64"]
 OLD_X86 = OLD_GLIBC_TAGS["linux-x86_64"]
 NEEDS_TAR_FILTERS = pytest.mark.skipif(
-    not hasattr(tarfile, "data_filter"), reason="this Python has no tarfile filters"
+    not hasattr(tarfile, "data_filter"),
+    reason="this Python has no tarfile filters",
 )
 
 
@@ -42,7 +43,9 @@ def test_lines_json_is_well_formed():
         for build in lines.builds(spec):
             assert re.fullmatch(rf"v{re.escape(line)}\.\d+", build.version)
             for key, digest in build.sha256.items():
-                assert key in PLATFORMS and re.fullmatch(r"[0-9a-f]{64}", digest)
+                assert key in PLATFORMS and re.fullmatch(
+                    r"[0-9a-f]{64}", digest
+                )
             if build.kind == "old_glibc":
                 assert set(build.sha256) <= set(OLD_GLIBC_TAGS)
 
@@ -66,7 +69,10 @@ def test_known_gaps_have_no_wheel():
     tags = {(w.line, w.tag) for w in lines.wheels()}
     assert ("0.10", "manylinux_2_34_aarch64") not in tags  # needs glibc 2.38
     assert ("0.10", "win_arm64") not in tags  # never published
-    assert ("0.11", OLD_GLIBC_TAGS["linux-arm64"]) not in tags  # neovim-releases: 0.12.3+
+    assert (
+        "0.11",
+        OLD_GLIBC_TAGS["linux-arm64"],
+    ) not in tags  # neovim-releases: 0.12.3+
     with pytest.raises(KeyError, match="has no build for win_arm64"):
         lines.find("0.10", "win_arm64")
 
@@ -136,7 +142,9 @@ def test_unpack_a_windows_zip(tmp_path):
     assert (tmp_path / "out" / "bin" / "nvim.exe").read_bytes() == b"MZ"
 
 
-def test_an_archive_that_does_not_match_its_pin_is_refused(tmp_path, monkeypatch):
+def test_an_archive_that_does_not_match_its_pin_is_refused(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("FAST_NVIM_RELEASE_CACHE_DIR", str(tmp_path))
 
     def evil(url, dest):
@@ -157,12 +165,16 @@ def test_a_verified_cached_archive_is_reused(tmp_path, monkeypatch):
     cached = tmp_path / digest[:16] / LINUX.asset
     cached.parent.mkdir()
     cached.write_bytes(data)
-    monkeypatch.setattr(fetch_nvim, "download", lambda url, dest: pytest.fail("downloaded"))
+    monkeypatch.setattr(
+        fetch_nvim, "download", lambda url, dest: pytest.fail("downloaded")
+    )
     assert fetch_nvim.archive(build, LINUX) == cached
 
 
 @NEEDS_TAR_FILTERS
-def test_fetch_writes_build_json_and_replaces_a_previous_build(tmp_path, monkeypatch):
+def test_fetch_writes_build_json_and_replaces_a_previous_build(
+    tmp_path, monkeypatch
+):
     dest = tmp_path / "_nvim"
     (dest / "0.12" / "linux-x86_64").mkdir(parents=True)  # leftovers
     (dest / "LICENSE.nvim-0.12.txt").write_text("Apache", encoding="utf-8")
@@ -186,7 +198,9 @@ def test_fetch_writes_build_json_and_replaces_a_previous_build(tmp_path, monkeyp
 @POSIX_ONLY
 def test_a_build_that_cannot_run_here_says_why(tmp_path):
     exe = tmp_path / "nvim"
-    exe.write_text("#!/bin/sh\necho \"nvim: version 'GLIBC_2.34' not found\" >&2\nexit 1\n")
+    exe.write_text(
+        "#!/bin/sh\necho \"nvim: version 'GLIBC_2.34' not found\" >&2\nexit 1\n"
+    )
     exe.chmod(0o755)
     with pytest.raises(SystemExit) as excinfo:
         fetch_nvim.check_runs(exe, "v0.12.6")
@@ -213,11 +227,23 @@ def fake_binary(key, glibc=b"GLIBC_2.34", macos=(11, 0)):
         header = struct.pack("<8I", 0xFEEDFACF, cputype, 0, 2, 1, 24, 0, 0)
         return header + struct.pack("<6I", 0x32, 24, 1, minos, 0, 0)
     machine = {"x86_64": 0x8664, "arm64": 0xAA64}[arch]
-    return b"MZ" + bytes(0x3A) + struct.pack("<I", 0x40) + b"PE\0\0" + struct.pack("<H", machine)
+    return (
+        b"MZ"
+        + bytes(0x3A)
+        + struct.pack("<I", 0x40)
+        + b"PE\0\0"
+        + struct.pack("<H", machine)
+    )
 
 
 def fake_wheel(
-    tmp_path, wheel, glibc=None, runtime=1600, info_override=None, version=None, binary=None
+    tmp_path,
+    wheel,
+    glibc=None,
+    runtime=1600,
+    info_override=None,
+    version=None,
+    binary=None,
 ):
     version = version or wheel.version
     path = tmp_path / f"fast_nvim_release-{version}-py3-none-{wheel.tag}.whl"
@@ -243,7 +269,9 @@ def fake_wheel(
             zf.writestr(f"{root}share/nvim/runtime/f{n}.vim", b"")
         zf.writestr(f"{root}LICENSE.nvim-{wheel.line}.txt", b"Apache")
         meta = f"fast_nvim_release-{version}.dist-info/"
-        tags = "".join(f"Tag: py3-none-{part}\n" for part in wheel.tag.split("."))
+        tags = "".join(
+            f"Tag: py3-none-{part}\n" for part in wheel.tag.split(".")
+        )
         zf.writestr(meta + "WHEEL", f"Root-Is-Purelib: false\n{tags}")
         zf.writestr(meta + "entry_points.txt", "[console_scripts]\n")
     return path
@@ -274,14 +302,33 @@ def test_a_broken_wheel_fails(tmp_path, kwargs, problem):
 @pytest.mark.parametrize(
     "line, tag, binary, problem",
     [
-        ("0.12", LINUX.wheel_tag, fake_binary("linux-arm64"), "built for arm64, not x86_64"),
-        ("0.12", "win_arm64", fake_binary("windows-x86_64"), "built for x86_64, not arm64"),
+        (
+            "0.12",
+            LINUX.wheel_tag,
+            fake_binary("linux-arm64"),
+            "built for arm64, not x86_64",
+        ),
+        (
+            "0.12",
+            "win_arm64",
+            fake_binary("windows-x86_64"),
+            "built for x86_64, not arm64",
+        ),
         ("0.12", "macosx_11_0_arm64", b"#!/bin/sh\n", "an unknown CPU"),
-        ("0.12", "macosx_11_0_arm64", fake_binary("macos-arm64", macos=(13, 0)), "macOS (13, 0)"),
+        (
+            "0.12",
+            "macosx_11_0_arm64",
+            fake_binary("macos-arm64", macos=(13, 0)),
+            "macOS (13, 0)",
+        ),
     ],
 )
-def test_an_executable_that_cannot_run_under_its_tag_fails(tmp_path, line, tag, binary, problem):
-    problems = check_wheels.check(fake_wheel(tmp_path, lines.find(line, tag), binary=binary))
+def test_an_executable_that_cannot_run_under_its_tag_fails(
+    tmp_path, line, tag, binary, problem
+):
+    problems = check_wheels.check(
+        fake_wheel(tmp_path, lines.find(line, tag), binary=binary)
+    )
     assert any(problem in item for item in problems), problems
 
 
@@ -295,7 +342,9 @@ def test_a_wheel_carries_only_its_own_lines_license(tmp_path):
 
 def test_an_old_glibc_wheel_must_not_need_a_newer_glibc(tmp_path):
     wheel = lines.find("0.12", OLD_X86)
-    problems = check_wheels.check(fake_wheel(tmp_path, wheel, glibc=b"GLIBC_2.34"))
+    problems = check_wheels.check(
+        fake_wheel(tmp_path, wheel, glibc=b"GLIBC_2.34")
+    )
     assert any("needs glibc (2, 34)" in item for item in problems), problems
 
 
@@ -303,11 +352,13 @@ def test_an_old_glibc_wheel_must_not_need_a_newer_glibc(tmp_path):
 # build_wheels: which wheels a run builds
 # --------------------------------------------------------------------------
 def test_select_by_line_and_tag(monkeypatch):
-    monkeypatch.setattr(build_wheels, "host_wheel_tag", lambda: LINUX.wheel_tag)
+    monkeypatch.setattr(
+        build_wheels, "host_wheel_tag", lambda: LINUX.wheel_tag
+    )
     chosen = build_wheels.select([], ["host"])
-    assert {w.line for w in chosen} == set(lines.load()["lines"]) and {w.tag for w in chosen} == {
-        LINUX.wheel_tag
-    }
+    assert {w.line for w in chosen} == set(lines.load()["lines"]) and {
+        w.tag for w in chosen
+    } == {LINUX.wheel_tag}
     assert {w.tag for w in build_wheels.select(["0.12"], [])} == {
         w.tag for w in lines.wheels() if w.line == "0.12"
     }
@@ -315,13 +366,21 @@ def test_select_by_line_and_tag(monkeypatch):
 
 def test_select_skips_wheels_already_published(monkeypatch):
     newest = lines.newest_line()
-    on_index = {w.filename for w in lines.wheels() if not w.version.startswith(newest + ".")}
+    on_index = {
+        w.filename
+        for w in lines.wheels()
+        if not w.version.startswith(newest + ".")
+    }
     monkeypatch.setattr(
         build_wheels,
         "published",
-        lambda index, version: {name for name in on_index if f"-{version}-" in name},
+        lambda index, version: {
+            name for name in on_index if f"-{version}-" in name
+        },
     )
-    chosen = build_wheels.select([], [], skip_published="https://test.pypi.org")
+    chosen = build_wheels.select(
+        [], [], skip_published="https://test.pypi.org"
+    )
     assert chosen and {w.line for w in chosen} == {newest}
 
 
@@ -331,7 +390,9 @@ def test_select_adds_missing_files_to_an_existing_version(monkeypatch):
     monkeypatch.setattr(
         build_wheels,
         "published",
-        lambda index, version: {name for name in official if f"-{version}-" in name},
+        lambda index, version: {
+            name for name in official if f"-{version}-" in name
+        },
     )
     chosen = build_wheels.select([], [], skip_published="https://pypi.org")
     assert chosen and all("2_17" in w.tag for w in chosen)
@@ -345,8 +406,15 @@ def _release(tag, platform_keys, digests=True):
     for key in platform_keys:
         name = PLATFORMS[key].asset
         digest = hashlib.sha256(f"{tag}{name}".encode()).hexdigest()
-        assets.append({"name": name, "digest": f"sha256:{digest}" if digests else None})
-    return {"tag_name": tag, "draft": False, "prerelease": False, "assets": assets}
+        assets.append(
+            {"name": name, "digest": f"sha256:{digest}" if digests else None}
+        )
+    return {
+        "tag_name": tag,
+        "draft": False,
+        "prerelease": False,
+        "assets": assets,
+    }
 
 
 def _upstream(official, old):
@@ -364,9 +432,13 @@ def test_newest_patch_per_line():
 def test_update_moves_only_the_lines_that_changed():
     data = copy.deepcopy(lines.load())
     specs = data["lines"]
-    current = {line: spec["official"]["version"] for line, spec in specs.items()}
+    current = {
+        line: spec["official"]["version"] for line, spec in specs.items()
+    }
     old = {
-        line: spec["old_glibc"]["version"] for line, spec in specs.items() if "old_glibc" in spec
+        line: spec["old_glibc"]["version"]
+        for line, spec in specs.items()
+        if "old_glibc" in spec
     }
     upstream = _upstream(
         [*current.values(), "v0.12.99"],  # Neovim ships a 0.12 patch
@@ -375,10 +447,18 @@ def test_update_moves_only_the_lines_that_changed():
     changes = pins.plan(data, upstream)
     assert changes == [("0.12", "official", "v0.12.99")]
     revision = data["revision"]
-    others = {line: spec for line, spec in copy.deepcopy(specs).items() if line != "0.12"}
+    others = {
+        line: spec
+        for line, spec in copy.deepcopy(specs).items()
+        if line != "0.12"
+    }
     assert pins.apply(data, upstream, changes) == ["0.12"]
-    assert data["revision"] == revision  # a new patch is a new version by itself
-    assert {line: spec for line, spec in specs.items() if line != "0.12"} == others
+    assert (
+        data["revision"] == revision
+    )  # a new patch is a new version by itself
+    assert {
+        line: spec for line, spec in specs.items() if line != "0.12"
+    } == others
     assert specs["0.12"]["official"]["version"] == "v0.12.99"
     assert set(specs["0.12"]["official"]["sha256"]) == set(PLATFORMS)
     versions = {w.version for w in lines.wheels(data) if w.line == "0.12"}
@@ -399,12 +479,19 @@ def test_update_adds_a_new_release_line():
     changes = [c for c in pins.plan(data, upstream) if c[0] == "0.99"]
     assert changes == [("0.99", "official", "v0.99.0")]
     pins.apply(data, upstream, changes)
-    assert lines.find("0.99", LINUX.wheel_tag, data).version == f"0.99.0.{data['revision']}"
+    assert (
+        lines.find("0.99", LINUX.wheel_tag, data).version
+        == f"0.99.0.{data['revision']}"
+    )
 
 
 def test_a_release_without_published_checksums_stops_the_update(monkeypatch):
     data = copy.deepcopy(lines.load())
-    upstream = {"official": {"v0.12.99": _release("v0.12.99", list(PLATFORMS), digests=False)}}
+    upstream = {
+        "official": {
+            "v0.12.99": _release("v0.12.99", list(PLATFORMS), digests=False)
+        }
+    }
     with pytest.raises(SystemExit, match="no published checksum"):
         pins.apply(data, upstream, [("0.12", "official", "v0.12.99")])
 
@@ -412,10 +499,15 @@ def test_a_release_without_published_checksums_stops_the_update(monkeypatch):
 def test_a_platform_missing_from_a_release_is_a_warning(capsys):
     data = copy.deepcopy(lines.load())
     without_windows_arm = [key for key in PLATFORMS if key != "windows-arm64"]
-    upstream = {"official": {"v0.12.99": _release("v0.12.99", without_windows_arm)}}
+    upstream = {
+        "official": {"v0.12.99": _release("v0.12.99", without_windows_arm)}
+    }
     pins.apply(data, upstream, [("0.12", "official", "v0.12.99")])
     assert "windows-arm64" not in data["lines"]["0.12"]["official"]["sha256"]
-    assert "warning: v0.12.99 has no nvim-win-arm64.zip" in capsys.readouterr().err
+    assert (
+        "warning: v0.12.99 has no nvim-win-arm64.zip"
+        in capsys.readouterr().err
+    )
 
 
 def test_bump_raises_the_revision_of_every_line(tmp_path):
@@ -426,7 +518,9 @@ def test_bump_raises_the_revision_of_every_line(tmp_path):
     after = lines.load(path)
     assert after["revision"] == before["revision"] + 1
     assert after["lines"] == before["lines"]
-    assert {w.version.rsplit(".", 1)[1] for w in lines.wheels(after)} == {str(after["revision"])}
+    assert {w.version.rsplit(".", 1)[1] for w in lines.wheels(after)} == {
+        str(after["revision"])
+    }
 
 
 def test_lagging_old_glibc_builds_are_a_note():
@@ -440,7 +534,9 @@ def test_lagging_old_glibc_builds_are_a_note():
 # --------------------------------------------------------------------------
 def test_release_notes_list_each_wheels_neovim(tmp_path):
     data = copy.deepcopy(lines.load())
-    data["lines"]["0.12"]["old_glibc"]["version"] = data["lines"]["0.12"]["official"]["version"]
+    data["lines"]["0.12"]["old_glibc"]["version"] = data["lines"]["0.12"][
+        "official"
+    ]["version"]
     official = fake_wheel(tmp_path, lines.find("0.12", LINUX.wheel_tag, data))
     old = fake_wheel(tmp_path, lines.find("0.12", OLD_X86, data))
     notes = release_notes.notes([official, old])
@@ -456,5 +552,8 @@ def test_a_lagging_old_glibc_build_is_its_own_version():
     data["lines"]["0.12"]["official"]["version"] = "v0.12.6"
     data["lines"]["0.12"]["old_glibc"]["version"] = "v0.12.5"
     revision = data["revision"]
-    assert lines.find("0.12", LINUX.wheel_tag, data).version == f"0.12.6.{revision}"
+    assert (
+        lines.find("0.12", LINUX.wheel_tag, data).version
+        == f"0.12.6.{revision}"
+    )
     assert lines.find("0.12", OLD_X86, data).version == f"0.12.5.{revision}"

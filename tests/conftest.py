@@ -18,7 +18,9 @@ from fast_nvim_release import bundle  # noqa: E402
 from fast_nvim_release.platforms import Platform, host_platform  # noqa: E402
 
 #: the fake nvim is a shell script, so tests that start it are POSIX-only
-POSIX_ONLY = pytest.mark.skipif(os.name == "nt", reason="the fake nvim is a shell script")
+POSIX_ONLY = pytest.mark.skipif(
+    os.name == "nt", reason="the fake nvim is a shell script"
+)
 
 FAKE_NVIM = """#!/bin/sh
 case "$*" in
@@ -32,7 +34,9 @@ esac
 """
 
 
-def make_bundle(root: Path, platform: Platform, neovim: str = "v0.12.6", version="0.12.6.1"):
+def make_bundle(
+    root: Path, platform: Platform, neovim: str = "v0.12.6", version="0.12.6.1"
+):
     """A tree that looks like the ``_nvim`` directory of a built wheel."""
     exe = root / "bin" / platform.exe
     exe.parent.mkdir(parents=True, exist_ok=True)

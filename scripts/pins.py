@@ -39,7 +39,9 @@ SHA256 = re.compile(r"\b([0-9a-f]{64})\b")
 # asking GitHub
 # --------------------------------------------------------------------------
 def _get(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "fast-nvim-release-pins"})
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "fast-nvim-release-pins"}
+    )
     token = os.environ.get("GITHUB_TOKEN")
     if token and url.startswith("https://api.github.com/"):
         # unredirected: release downloads redirect to another host
@@ -54,7 +56,9 @@ def fetch_releases(repo: str) -> Dict[str, dict]:
     for page in range(1, 6):
         batch = json.loads(_get(API.format(repo, page)))
         for release in batch:
-            if not (release["draft"] or release["prerelease"]) and TAG.match(release["tag_name"]):
+            if not (release["draft"] or release["prerelease"]) and TAG.match(
+                release["tag_name"]
+            ):
                 found[release["tag_name"]] = release
         if len(batch) < 100:
             break
@@ -70,7 +74,9 @@ def newest_patches(tags) -> Dict[str, str]:
             version = tuple(int(part) for part in match.groups())
             line = f"{version[0]}.{version[1]}"
             newest[line] = max(newest.get(line, version), version)
-    return {line: "v{}.{}.{}".format(*version) for line, version in newest.items()}
+    return {
+        line: "v{}.{}.{}".format(*version) for line, version in newest.items()
+    }
 
 
 def checksums(release: dict, platform_keys) -> Dict[str, str]:
@@ -92,9 +98,15 @@ def checksums(release: dict, platform_keys) -> Dict[str, str]:
             found[key] = digest.split(":", 1)[1]
             continue
         sumfile = assets.get(PLATFORMS[key].asset + ".sha256sum")
-        match = SHA256.search(_get(sumfile["browser_download_url"]).decode()) if sumfile else None
+        match = (
+            SHA256.search(_get(sumfile["browser_download_url"]).decode())
+            if sumfile
+            else None
+        )
         if match is None:
-            raise SystemExit(f"{release['tag_name']}: no published checksum for {asset['name']}")
+            raise SystemExit(
+                f"{release['tag_name']}: no published checksum for {asset['name']}"
+            )
         found[key] = match.group(1)
     return found
 
@@ -105,13 +117,17 @@ def checksums(release: dict, platform_keys) -> Dict[str, str]:
 KINDS = {"official": list(PLATFORMS), "old_glibc": list(OLD_GLIBC_TAGS)}
 
 
-def plan(data: dict, upstream: Dict[str, Dict[str, dict]]) -> List[Tuple[str, str, str]]:
+def plan(
+    data: dict, upstream: Dict[str, Dict[str, dict]]
+) -> List[Tuple[str, str, str]]:
     """``(line, kind, newest tag)`` for every pin that is behind, plus new lines."""
     changes = []
     specs = data["lines"]
     newest = {kind: newest_patches(upstream[kind]) for kind in KINDS}
     supported = max(lines.line_key(line) for line in specs)
-    for line in sorted(set(specs) | set(newest["official"]), key=lines.line_key):
+    for line in sorted(
+        set(specs) | set(newest["official"]), key=lines.line_key
+    ):
         if line not in specs and lines.line_key(line) < supported:
             continue  # an old line we never supported
         for kind in KINDS:
@@ -122,7 +138,9 @@ def plan(data: dict, upstream: Dict[str, Dict[str, dict]]) -> List[Tuple[str, st
     return changes
 
 
-def apply(data: dict, upstream: Dict[str, Dict[str, dict]], changes) -> List[str]:
+def apply(
+    data: dict, upstream: Dict[str, Dict[str, dict]], changes
+) -> List[str]:
     """Edit ``data`` in place; return the lines whose pins moved."""
     touched = []
     for line, kind, tag in changes:
@@ -132,7 +150,11 @@ def apply(data: dict, upstream: Dict[str, Dict[str, dict]], changes) -> List[str
         sha = checksums(upstream[kind][tag], wanted)
         if not sha:
             continue
-        spec[kind] = {"version": tag, "sha256": sha, **({"skip": skip} if skip else {})}
+        spec[kind] = {
+            "version": tag,
+            "sha256": sha,
+            **({"skip": skip} if skip else {}),
+        }
         if line not in touched:
             touched.append(line)
     return touched
@@ -149,15 +171,20 @@ def lagging(data: dict) -> List[str]:
         f"{line}: the old-glibc wheels carry {spec['old_glibc']['version']}, "
         f"the others {spec['official']['version']}"
         for line, spec in data["lines"].items()
-        if spec.get("old_glibc") and spec["old_glibc"]["version"] != spec["official"]["version"]
+        if spec.get("old_glibc")
+        and spec["old_glibc"]["version"] != spec["official"]["version"]
     ]
 
 
 def cmd_check(args, data, upstream) -> int:
     changes = plan(data, upstream)
     for line, kind, tag in changes:
-        pinned = (data["lines"].get(line, {}).get(kind) or {}).get("version", "nothing")
-        print(f"behind: {line} {kind} pinned {pinned}, {lines.REPOS[kind]} has {tag}")
+        pinned = (data["lines"].get(line, {}).get(kind) or {}).get(
+            "version", "nothing"
+        )
+        print(
+            f"behind: {line} {kind} pinned {pinned}, {lines.REPOS[kind]} has {tag}"
+        )
     for note in lagging(data):
         print(f"note: {note}")
     if not changes:
@@ -173,7 +200,9 @@ def cmd_update(args, data, upstream) -> int:
     for wheel in lines.wheels(data):
         if wheel.line in touched and wheel.version not in printed:
             printed.append(wheel.version)
-            print(f"{wheel.line} -> {wheel.version} ({wheel.build.kind} {wheel.build.version})")
+            print(
+                f"{wheel.line} -> {wheel.version} ({wheel.build.kind} {wheel.build.version})"
+            )
     lines.save(data, args.file)
     if not touched:
         print("every pin is the newest patch")
@@ -183,7 +212,9 @@ def cmd_update(args, data, upstream) -> int:
 def cmd_bump(args, data, _upstream) -> int:
     data["revision"] += 1
     print(f"revision {data['revision']}; the next release publishes:")
-    for version in sorted({w.version for w in lines.wheels(data)}, key=lines.line_key):
+    for version in sorted(
+        {w.version for w in lines.wheels(data)}, key=lines.line_key
+    ):
         print(f"  {version}")
     lines.save(data, args.file)
     return 0
@@ -191,23 +222,34 @@ def cmd_bump(args, data, _upstream) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--file", type=Path, default=lines.LINES_FILE, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--file", type=Path, default=lines.LINES_FILE, help=argparse.SUPPRESS
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("check", help="report pins that are behind")
-    check.add_argument("--strict", action="store_true", help="exit 1 if any pin is behind")
+    check.add_argument(
+        "--strict", action="store_true", help="exit 1 if any pin is behind"
+    )
     commands.add_parser("update", help="move pins to the newest patches")
-    commands.add_parser("bump", help="raise the revision (re-release every line)")
+    commands.add_parser(
+        "bump", help="raise the revision (re-release every line)"
+    )
     args = parser.parse_args(argv)
 
     data = lines.load(args.file)
     upstream: Optional[Dict[str, Dict[str, dict]]] = None
     if args.command != "bump":
         try:
-            upstream = {kind: fetch_releases(repo) for kind, repo in lines.REPOS.items()}
+            upstream = {
+                kind: fetch_releases(repo)
+                for kind, repo in lines.REPOS.items()
+            }
         except (urllib.error.URLError, OSError, ValueError) as exc:
             print(f"error: cannot ask GitHub: {exc}", file=sys.stderr)
             return 2
-    handler = {"check": cmd_check, "update": cmd_update, "bump": cmd_bump}[args.command]
+    handler = {"check": cmd_check, "update": cmd_update, "bump": cmd_bump}[
+        args.command
+    ]
     return handler(args, data, upstream)
 
 
