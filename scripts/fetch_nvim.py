@@ -176,7 +176,7 @@ def main(argv=None) -> int:
     data = lines.load()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--line", choices=list(data["lines"]), default=lines.newest_line(data)
+        "--line", choices=list(data.lines), default=lines.newest_line(data)
     )
     parser.add_argument(
         "--wheel", help="wheel platform tag (default: the one pip picks here)"

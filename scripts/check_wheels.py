@@ -96,14 +96,14 @@ def macos_floor(binary: bytes) -> Optional[Tuple[int, int]]:
     return None
 
 
-def check(path: Path, data: Optional[dict] = None) -> List[str]:
+def check(path: Path, data: Optional[lines.LineJson] = None) -> List[str]:
     data = data or lines.load()
     match = WHEEL_NAME.match(path.name)
     if not match:
         return [f"unexpected wheel name: {path.name}"]
     line, tag = match.group("line"), match.group("tag")
     version = f"{line}.{match.group('patch')}.{match.group('revision')}"
-    if line not in data["lines"]:
+    if line not in data.lines:
         return [f"{line} is not a line in lines.json"]
     try:
         spec = lines.find(line, tag, data)

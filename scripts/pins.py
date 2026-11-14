@@ -23,11 +23,12 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from dataclasses import replace
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import lines
-from lines import BuildKind
+from lines import BuildKind, BuildSpec, LineJson, LineSpec
 
 from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
 
@@ -81,10 +82,12 @@ def newest_patches(tags) -> Dict[str, str]:
     }
 
 
-def checksums(release: dict, platform_keys) -> Dict[str, str]:
+def checksums(
+    release: dict, platform_keys: List[PlatformKey]
+) -> Dict[PlatformKey, str]:
     """platform -> sha256 of its archive in ``release``, from GitHub's digests."""
     assets = {asset["name"]: asset for asset in release.get("assets", [])}
-    found = {}
+    found: Dict[PlatformKey, str] = {}
     for key in platform_keys:
         asset = assets.get(PLATFORMS[key].asset)
         if asset is None:
@@ -116,79 +119,82 @@ def checksums(release: dict, platform_keys) -> Dict[str, str]:
 # --------------------------------------------------------------------------
 # the commands
 # --------------------------------------------------------------------------
-KINDS: Dict[BuildKind, List[PlatformKey]] = {
+KIND_KEYS: Dict[BuildKind, List[PlatformKey]] = {
     "official": list(PLATFORMS),
     "old_glibc": list(OLD_GLIBC_TAGS),
 }
 
 
 def plan(
-    data: dict, upstream: Dict[str, Dict[str, dict]]
+    data: LineJson, upstream: Dict[str, Dict[str, dict]]
 ) -> List[Tuple[str, BuildKind, str]]:
     """``(line, kind, newest tag)`` for every pin that is behind, plus new lines."""
     changes = []
-    specs = data["lines"]
-    newest = {kind: newest_patches(upstream[kind]) for kind in KINDS}
+    specs = data.lines
+    newest = {kind: newest_patches(upstream[kind]) for kind in KIND_KEYS}
     supported = max(lines.line_key(line) for line in specs)
     for line in sorted(
         set(specs) | set(newest["official"]), key=lines.line_key
     ):
         if line not in specs and lines.line_key(line) < supported:
             continue  # an old line we never supported
-        for kind in KINDS:
+        for kind in KIND_KEYS:
             tag = newest[kind].get(line)
-            pinned = (specs.get(line, {}).get(kind) or {}).get("version")
-            if tag and tag != pinned:
+            pin = specs[line].pin(kind) if line in specs else None
+            if tag and (pin is None or tag != pin.version):
                 changes.append((line, kind, tag))
     return changes
 
 
 def apply(
-    data: dict,
+    data: LineJson,
     upstream: Dict[str, Dict[str, dict]],
     changes: List[Tuple[str, BuildKind, str]],
-) -> List[str]:
-    """Edit ``data`` in place; return the lines whose pins moved."""
+) -> Tuple[LineJson, List[str]]:
+    """The edited data, and the lines whose pins moved."""
+    specs = dict(data.lines)
     touched = []
     for line, kind, tag in changes:
-        spec = data["lines"].setdefault(line, {})
-        skip = (spec.get(kind) or {}).get("skip", {})
-        wanted = [key for key in KINDS[kind] if key not in skip]
+        spec = specs.get(line)
+        if spec is None and kind != "official":
+            continue  # a line is defined by its official build
+        pin = spec.pin(kind) if spec else None
+        skip = pin.skip if pin else {}
+        wanted = [key for key in KIND_KEYS[kind] if key not in skip]
         sha = checksums(upstream[kind][tag], wanted)
         if not sha:
             continue
-        spec[kind] = {
-            "version": tag,
-            "sha256": sha,
-            **({"skip": skip} if skip else {}),
-        }
+        new_pin = BuildSpec(version=tag, sha256=sha, skip=skip)
+        if spec is None:
+            specs[line] = LineSpec(official=new_pin)
+        else:
+            specs[line] = replace(spec, **{kind: new_pin})
         if line not in touched:
             touched.append(line)
-    return touched
+    return replace(data, lines=specs), touched
 
 
-def ensure_license(line: str, data: dict) -> None:
+def ensure_license(line: str, data: LineJson) -> None:
     path = lines.NVIM_DIR / lines.license_name(line)
     if not path.is_file():
         path.write_bytes(_get(lines.license_url(line, data)))
 
 
-def lagging(data: dict) -> List[str]:
+def lagging(data: LineJson) -> List[str]:
     return [
-        f"{line}: the old-glibc wheels carry {spec['old_glibc']['version']}, "
-        f"the others {spec['official']['version']}"
-        for line, spec in data["lines"].items()
-        if spec.get("old_glibc")
-        and spec["old_glibc"]["version"] != spec["official"]["version"]
+        f"{line}: the old-glibc wheels carry {spec.old_glibc.version}, "
+        f"the others {spec.official.version}"
+        for line, spec in data.lines.items()
+        if spec.old_glibc and spec.old_glibc.version != spec.official.version
     ]
 
 
 def cmd_check(args, data, upstream) -> int:
     changes = plan(data, upstream)
     for line, kind, tag in changes:
-        pinned = (data["lines"].get(line, {}).get(kind) or {}).get(
-            "version", "nothing"
-        )
+        spec = data.lines.get(line)
+        pin = spec.pin(kind) if spec else None
+        pinned = pin.version if pin else "nothing"
         print(
             f"behind: {line} {kind} pinned {pinned}, {lines.REPOS[kind]} has {tag}"
         )
@@ -200,7 +206,7 @@ def cmd_check(args, data, upstream) -> int:
 
 
 def cmd_update(args, data, upstream) -> int:
-    touched = apply(data, upstream, plan(data, upstream))
+    data, touched = apply(data, upstream, plan(data, upstream))
     printed: List[str] = []
     for line in touched:
         ensure_license(line, data)
@@ -217,8 +223,8 @@ def cmd_update(args, data, upstream) -> int:
 
 
 def cmd_bump(args, data, _upstream) -> int:
-    data["revision"] += 1
-    print(f"revision {data['revision']}; the next release publishes:")
+    data = replace(data, revision=data.revision + 1)
+    print(f"revision {data.revision}; the next release publishes:")
     for version in sorted(
         {w.version for w in lines.wheels(data)}, key=lines.line_key
     ):
