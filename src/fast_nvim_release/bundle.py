@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Iterable, Set, Union
 
-from .platforms import PLATFORMS, Platform, host_platform
+from fast_nvim_release.platforms import PLATFORMS, Platform, host_platform
 
 BUNDLE_ROOT = Path(__file__).resolve().parent / "_nvim"
 

@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from . import __version__, bundle
-from .bundle import FastNvimError
+from fast_nvim_release import __version__, bundle
+from fast_nvim_release.bundle import FastNvimError
 
 PROG = "fast-nvim-release"
 
