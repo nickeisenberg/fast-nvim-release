@@ -27,8 +27,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import lines
+from lines import BuildKind
 
-from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS
+from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
 
 API = "https://api.github.com/repos/{}/releases?per_page=100&page={}"
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
@@ -71,7 +72,8 @@ def newest_patches(tags) -> Dict[str, str]:
     for tag in tags:
         match = TAG.match(tag)
         if match:
-            version = tuple(int(part) for part in match.groups())
+            major, minor, patch = (int(part) for part in match.groups())
+            version = (major, minor, patch)
             line = f"{version[0]}.{version[1]}"
             newest[line] = max(newest.get(line, version), version)
     return {
@@ -114,12 +116,15 @@ def checksums(release: dict, platform_keys) -> Dict[str, str]:
 # --------------------------------------------------------------------------
 # the commands
 # --------------------------------------------------------------------------
-KINDS = {"official": list(PLATFORMS), "old_glibc": list(OLD_GLIBC_TAGS)}
+KINDS: Dict[BuildKind, List[PlatformKey]] = {
+    "official": list(PLATFORMS),
+    "old_glibc": list(OLD_GLIBC_TAGS),
+}
 
 
 def plan(
     data: dict, upstream: Dict[str, Dict[str, dict]]
-) -> List[Tuple[str, str, str]]:
+) -> List[Tuple[str, BuildKind, str]]:
     """``(line, kind, newest tag)`` for every pin that is behind, plus new lines."""
     changes = []
     specs = data["lines"]
@@ -139,7 +144,9 @@ def plan(
 
 
 def apply(
-    data: dict, upstream: Dict[str, Dict[str, dict]], changes
+    data: dict,
+    upstream: Dict[str, Dict[str, dict]],
+    changes: List[Tuple[str, BuildKind, str]],
 ) -> List[str]:
     """Edit ``data`` in place; return the lines whose pins moved."""
     touched = []

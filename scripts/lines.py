@@ -36,6 +36,7 @@ from fast_nvim_release.platforms import (  # noqa: E402
     PLATFORMS,
     Platform,
     PlatformKey,
+    WheelTag,
 )
 
 LINES_FILE = REPOROOT / "lines.json"
@@ -67,7 +68,7 @@ class Build:
 class Wheel:
     line: str  #: e.g. ``0.12``
     version: str  #: the package version, e.g. ``0.12.6.1``
-    tag: str  #: the wheel's platform tag
+    tag: WheelTag  #: the wheel's platform tag
     platform: Platform
     build: Build
 

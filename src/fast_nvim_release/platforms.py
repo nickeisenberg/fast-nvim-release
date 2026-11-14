@@ -30,12 +30,25 @@ PlatformKey = Literal[
 ]
 
 
+#: The wheel platform tags this tool publishes.
+WheelTag = Literal[
+    "manylinux_2_34_x86_64",
+    "manylinux_2_34_aarch64",
+    "manylinux_2_17_x86_64.manylinux2014_x86_64",
+    "manylinux_2_17_aarch64.manylinux2014_aarch64",
+    "macosx_11_0_x86_64",
+    "macosx_11_0_arm64",
+    "win_amd64",
+    "win_arm64",
+]
+
+
 @dataclass(frozen=True)
 class Platform:
     key: PlatformKey  #: e.g. ``linux-x86_64``
     asset: str  #: release archive name on GitHub
     exe: str  #: the Neovim executable
-    wheel_tag: str  #: platform tag of the wheel with the official build
+    wheel_tag: WheelTag  #: platform tag of the wheel with the official build
 
     @property
     def archive_dir(self) -> str:
@@ -79,7 +92,7 @@ PLATFORMS: Dict[PlatformKey, Platform] = {
 
 #: Tags of the wheels with the glibc 2.17 builds.  They also name
 #: ``manylinux2014`` so that pip before 20.3 (RHEL 8's python39) recognises them.
-OLD_GLIBC_TAGS: Dict[PlatformKey, str] = {
+OLD_GLIBC_TAGS: Dict[PlatformKey, WheelTag] = {
     "linux-x86_64": "manylinux_2_17_x86_64.manylinux2014_x86_64",
     "linux-arm64": "manylinux_2_17_aarch64.manylinux2014_aarch64",
 }
@@ -122,7 +135,7 @@ def host_glibc() -> Optional[Tuple[int, int]]:
     return (int(match.group(1)), int(match.group(2))) if match else None
 
 
-def host_wheel_tag() -> Optional[str]:
+def host_wheel_tag() -> Optional[WheelTag]:
     """The wheel tag pip would install on this machine (``None`` if there is none).
 
     Like pip, this looks at the glibc too: a Linux older than the official
