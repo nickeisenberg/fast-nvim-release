@@ -11,9 +11,20 @@ installed Neovim v0.12.6 into /home/you/.local
   /home/you/.local/bin/nvim
 ```
 
-`setup` takes about 0.15 seconds; creating a venv and installing the wheel
-(10-13 MB, the binaries are inside) takes a few seconds more. Nothing is
-downloaded from GitHub, at install time or later.
+From nothing to a working `nvim`, with a fresh venv and a cold pip cache, takes
+3 to 4 seconds; `setup` itself about 0.15 of them:
+
+```console
+$ time bash -c 'python3 -m venv get-nvim && get-nvim/bin/pip install -q fast-nvim-release && get-nvim/bin/fast-nvim-release setup --prefix ~/nvim && ~/nvim/bin/nvim --version | head -1'
+installed Neovim v0.12.6 into /home/you/nvim
+  /home/you/nvim/bin/nvim
+NVIM v0.12.6
+
+real    0m3.390s
+```
+
+The wheel is 10-13 MB, with the binaries inside: nothing is downloaded from
+GitHub, at install time or later.
 
 ## Install
 
