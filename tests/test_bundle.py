@@ -19,15 +19,39 @@ def runtime_text(prefix):
 
 def test_build_info_and_exe(fake_bundle, host):
     info = bundle.build_info()
-    assert info["neovim"] == "v0.12.6" and info["line"] == "0.12"
+    assert info == bundle.BuildJson(
+        version="0.12.6.1",
+        line="0.12",
+        neovim="v0.12.6",
+        platform=host.key,
+        tag=host.wheel_tag,
+    )
     assert bundle.bundled_exe() == fake_bundle / "bin" / host.exe
 
 
 def test_a_package_built_without_neovim_says_so(tmp_path, monkeypatch):
     monkeypatch.setattr(bundle, "BUNDLE_ROOT", tmp_path / "empty")
-    assert bundle.build_info() == {}
+    assert bundle.build_info() is None
     with pytest.raises(bundle.FastNvimError, match=r"fetch_nvim\.py"):
         bundle.bundled_exe()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not json",
+        "[]",
+        '{"version": "0.12.6.1", "line": "0.12"}',
+        '{"version": "0.12.6.1", "line": "0.12", "neovim": "v0.12.6",'
+        ' "platform": "linux-x86_64", "tag": 1}',
+    ],
+)
+def test_a_damaged_build_json_counts_as_no_build(
+    tmp_path, monkeypatch, content
+):
+    monkeypatch.setattr(bundle, "BUNDLE_ROOT", tmp_path)
+    (tmp_path / "build.json").write_text(content, encoding="utf-8")
+    assert bundle.build_info() is None
 
 
 def test_install_copies_the_tree_and_records_it(fake_bundle, host, prefix):

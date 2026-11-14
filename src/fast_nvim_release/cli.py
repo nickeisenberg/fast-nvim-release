@@ -23,9 +23,9 @@ PROG = "fast-nvim-release"
 
 def _version_text() -> str:
     info = bundle.build_info()
-    if not info:
+    if info is None:
         return f"{PROG} {__version__} (no Neovim build bundled)"
-    return f"{PROG} {__version__} (Neovim {info.get('neovim')} for {info.get('platform')})"
+    return f"{PROG} {__version__} (Neovim {info.neovim} for {info.platform})"
 
 
 def _on_path(directory: Path) -> bool:
@@ -40,9 +40,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
     prefix = bundle.normalize(args.prefix)
     exe = bundle.install(prefix, force=args.force)
     bundle.verify(exe, prefix)
-    print(
-        f"installed Neovim {bundle.build_info().get('neovim', '')} into {prefix}".rstrip()
-    )
+    info = bundle.build_info()
+    neovim = info.neovim if info else ""
+    print(f"installed Neovim {neovim} into {prefix}".rstrip())
     print(f"  {exe}")
     if not _on_path(exe.parent):
         if os.name == "nt":

@@ -30,7 +30,7 @@ from pathlib import Path
 import lines
 from lines import Build, Wheel
 
-from fast_nvim_release.bundle import PARTS
+from fast_nvim_release.bundle import PARTS, BuildJson
 from fast_nvim_release.platforms import Platform, host_platform, host_wheel_tag
 
 DEST = lines.NVIM_DIR
@@ -152,18 +152,21 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     clear(dest)
     unpack(source, wheel.platform, dest)
-    info = {
-        "version": wheel.version,
-        "line": wheel.line,
-        "neovim": wheel.build.version,
-        "platform": wheel.platform.key,
-        "tag": wheel.tag,
-    }
-    (dest / "build.json").write_text(
-        json.dumps(info, indent=2) + "\n", encoding="utf-8"
+
+    info = BuildJson(
+        version=wheel.version,
+        line=wheel.line,
+        neovim=wheel.build.version,
+        platform=wheel.platform.key,
+        tag=wheel.tag,
     )
+    (dest / "build.json").write_text(
+        json.dumps(info.__dict__, indent=2) + "\n", encoding="utf-8"
+    )
+
     if runs_here(wheel):
         check_runs(dest / "bin" / wheel.platform.exe, wheel.build.version)
+
     license_file = dest / lines.license_name(wheel.line)
     if not license_file.is_file():
         download(lines.license_url(wheel.line, lines.load()), license_file)

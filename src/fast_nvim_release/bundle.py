@@ -18,8 +18,9 @@ import json
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Dict, Iterable, Set, Union
+from typing import Dict, Iterable, Optional, Set, Union
 
 from fast_nvim_release.platforms import PLATFORMS, Platform, host_platform
 
@@ -32,6 +33,15 @@ PARTS = ("bin", "lib/nvim", "share/nvim/runtime")
 MARKER = Path("share") / "fast-nvim-release" / "install.json"
 
 
+@dataclass(frozen=True)
+class BuildJson:
+    version: str
+    line: str
+    neovim: str
+    platform: str
+    tag: str
+
+
 class FastNvimError(RuntimeError):
     """Something the user can fix; reported without a traceback."""
 
@@ -39,24 +49,27 @@ class FastNvimError(RuntimeError):
 # --------------------------------------------------------------------------
 # the build inside this wheel
 # --------------------------------------------------------------------------
-def build_info() -> Dict[str, str]:
-    """``build.json``: the line, Neovim version, platform and tag of this wheel."""
+def build_info() -> Optional[BuildJson]:
+    """``build.json``, or ``None`` when this installation carries no build."""
     try:
         data = json.loads(
             (BUNDLE_ROOT / "build.json").read_text(encoding="utf-8")
         )
     except (OSError, ValueError):
-        return {}
-    return (
-        {k: v for k, v in data.items() if isinstance(v, str)}
-        if isinstance(data, dict)
-        else {}
-    )
+        return None
+    if not isinstance(data, dict):
+        return None
+    names = [field.name for field in fields(BuildJson)]
+    if not all(isinstance(data.get(name), str) for name in names):
+        return None
+    return BuildJson(*(data[name] for name in names))
 
 
 def bundled_platform() -> Platform:
     """The platform of the bundled build (this machine's, if unrecorded)."""
-    key = build_info().get("platform", "")
+    info = build_info()
+    key = info.platform if info else ""
+
     if key in PLATFORMS:
         return PLATFORMS[key]
     here = host_platform()
@@ -140,8 +153,8 @@ def _write_marker(prefix: Path, bin_names: Iterable[str]) -> None:
     marker.parent.mkdir(parents=True, exist_ok=True)
     info = build_info()
     data = {
-        "line": info.get("line"),
-        "nvim_version": info.get("neovim"),
+        "line": info.line if info else None,
+        "nvim_version": info.neovim if info else None,
         "platform": bundled_platform().key,
         "bin": sorted(bin_names),
     }
