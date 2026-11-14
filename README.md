@@ -9,7 +9,10 @@ From nothing to a working `nvim`, in a fresh venv with a cold pip cache, takes
 3 to 4 seconds, of which `setup` itself is about 0.15:
 
 ```console
-$ time bash -c 'python3 -m venv get-nvim && get-nvim/bin/pip install -q fast-nvim-release && get-nvim/bin/fast-nvim-release setup --prefix ~/nvim && ~/nvim/bin/nvim --version | head -1'
+$ time bash -c 'python3 -m venv get-nvim && \
+    get-nvim/bin/pip install -q fast-nvim-release && \
+    get-nvim/bin/fast-nvim-release setup --prefix ~/nvim && \
+    ~/nvim/bin/nvim --version | head -1'
 installed Neovim v0.12.6 into /home/you/nvim
   /home/you/nvim/bin/nvim
 NVIM v0.12.6
