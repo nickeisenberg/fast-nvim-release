@@ -37,12 +37,12 @@ def _on_path(directory: Path) -> bool:
 
 
 def cmd_setup(prefix: str, force: bool) -> int:
-    prefix = bundle.normalize(prefix)
-    exe = bundle.install(prefix, force=force)
-    bundle.verify(exe, prefix)
+    prefix_ = bundle.normalize(prefix)
+    exe = bundle.install(prefix_, force=force)
+    bundle.verify(exe, prefix_)
     info = bundle.build_info()
     neovim = info.neovim if info else ""
-    print(f"installed Neovim {neovim} into {prefix}".rstrip())
+    print(f"installed Neovim {neovim} into {prefix_}".rstrip())
     print(f"  {exe}")
     if not _on_path(exe.parent):
         if os.name == "nt":
@@ -58,10 +58,10 @@ def cmd_setup(prefix: str, force: bool) -> int:
 
 
 def cmd_path(prefix: Optional[str]) -> int:
-    prefix = bundle.normalize(prefix) if prefix else bundle.default_prefix()
-    exe = prefix / "bin" / ("nvim.exe" if os.name == "nt" else "nvim")
-    if bundle.installed(prefix) is None or not exe.is_file():
-        raise FastNvimError(f"{PROG} has not installed Neovim in {prefix}")
+    prefix_ = bundle.normalize(prefix) if prefix else bundle.default_prefix()
+    exe = prefix_ / "bin" / ("nvim.exe" if os.name == "nt" else "nvim")
+    if bundle.installed(prefix_) is None or not exe.is_file():
+        raise FastNvimError(f"{PROG} has not installed Neovim in {prefix_}")
     print(exe)
     return 0
 
