@@ -17,7 +17,7 @@ are pinned to commit SHAs with the tag in a comment; bump both together.
 ## Layout
 
 ```
-lines.json                          every Neovim line: release counter k, pinned builds
+lines.json                          the revision, and every Neovim line's pinned builds
 src/fast_nvim_release/cli.py        setup / path / run  (the stable interface)
 src/fast_nvim_release/bundle.py     the bundled build, installing into a prefix
 src/fast_nvim_release/platforms.py  platforms, wheel tags, which machine this is
@@ -27,26 +27,29 @@ scripts/fetch_nvim.py               download, verify and unpack one wheel's buil
 scripts/build_wheels.py             build any set of wheels (or only unpublished ones)
 scripts/check_wheels.py             validate wheels against lines.json
 scripts/smoke_test.py               install wheels in a clean venv and use them
-scripts/pins.py                     follow Neovim's releases; bump k
+scripts/pins.py                     follow Neovim's releases; bump the revision
 scripts/release_notes.py            one GitHub release per published version
 ```
 
 ## Versions and lines
 
-A package version is `<line>.<k>`: one Neovim line, and that line's release
-counter `k` from `lines.json`. Each line carries the newest patch of its
-Neovim line: the official build (`neovim/neovim`) for six platforms, plus,
+A package version is `<Neovim version>.<revision>` (`0.12.6.1`): the exact
+Neovim inside, and the `revision` of this project's code from `lines.json`.
+Each line carries the newest patch of its Neovim line: the official build (`neovim/neovim`) for six platforms, plus,
 where Neovim publishes one, the glibc 2.17 build (`neovim/neovim-releases`)
 for older Linux, in wheels tagged `manylinux_2_17_*.manylinux2014_*`. pip
 prefers the `manylinux_2_34` wheel wherever it can run.
 
-`k` goes up whenever anything in that line's wheels changes. Nothing is ever
-deleted from PyPI, and a release only publishes versions the index does not
-have yet, so bumping `k` is how a line gets released and every other line is
-left alone.
+A new Neovim patch is a new version by itself; the revision stays. The
+revision goes up only when the installed code changes, and then every line's
+current patch is released again. Older patches are never rebuilt. When the
+old-glibc build lags (official v0.12.6, old-glibc v0.12.5) its wheels are their
+own version (`0.12.5.1`); once it catches up, its wheels are added to the
+existing `0.12.6.1`. Nothing is ever deleted from PyPI, and a release only
+uploads the wheel files the index does not have yet.
 
 The command line is a promise (see "Stability" in the README): versions name
-Neovim lines, so they cannot signal breaking changes. Add, never remove.
+Neovim versions, so they cannot signal breaking changes. Add, never remove.
 
 ## Building wheels locally
 
@@ -72,8 +75,8 @@ tracked, because every wheel must ship its line's license.
 
 `.github/workflows/upstream.yml` runs `python scripts/pins.py update` every
 Monday. It moves each pin to the newest patch in its repository with the
-checksums GitHub publishes, adds new lines, bumps `k` of every changed line,
-and opens a pull request (branch `pins/update`) with CI started on it. Review
+checksums GitHub publishes and adds new lines (the revision stays), and opens
+a pull request (branch `pins/update`) with CI started on it. Review
 `lines.json`, wait for CI, merge, then release.
 
 By hand: `python scripts/pins.py check` reports, `python scripts/pins.py update`
@@ -91,7 +94,7 @@ Only changes to the installed package (`src/fast_nvim_release/`) need a
 release; build scripts, CI and docs do not. Batch fixes, then:
 
 ```console
-$ python scripts/pins.py bump --all     # every line gets k + 1
+$ python scripts/pins.py bump     # revision + 1: every line's current patch
 ```
 
 commit, merge, and release.
@@ -99,10 +102,11 @@ commit, merge, and release.
 ## Releasing
 
 Actions > release > Run workflow, choosing the index (TestPyPI by default).
-It builds every version in `lines.json` that index does not have, validates
-and smoke-tests them, and uploads them. Publishing to PyPI also creates one
-GitHub release per version, listing the exact Neovim in each wheel. An index
-never accepts the same version twice; rehearse on TestPyPI first.
+It builds every wheel in `lines.json` that index does not have, validates and
+smoke-tests them, and uploads them. Publishing to PyPI also creates one GitHub
+release per version (or adds to it, when wheels join an existing version),
+listing the exact Neovim in each wheel. An index never accepts the same file
+twice; rehearse on TestPyPI first.
 
 One-time setup on each index (Your account > Publishing > add a pending
 publisher, or the project's Publishing settings): repository

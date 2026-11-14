@@ -2,7 +2,8 @@
 
 ``scripts/fetch_nvim.py`` unpacks one Neovim build into
 ``src/fast_nvim_release/_nvim/`` and records it in ``_nvim/build.json``: the
-package version (``<line>.<k>``, e.g. ``0.12.3``) and the wheel's platform tag.
+package version (``<neovim>.<revision>``, e.g. ``0.12.6.1``) and the wheel's
+platform tag.
 This file reads both from there, so ``fetch_nvim.py`` then ``pip install .``
 (or ``python -m build``) always produces a consistent wheel.
 ``scripts/check_wheels.py`` verifies the result against ``lines.json``.

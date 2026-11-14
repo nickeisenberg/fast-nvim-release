@@ -17,11 +17,12 @@ wheel from PyPI.
 
 ## Quickstart
 
-Each package version carries one Neovim line. Pick the line with pip:
+The package version is the Neovim version inside, plus a revision of this
+tool: `0.11.7.1` is Neovim v0.11.7. Pick a line, or an exact Neovim, with pip:
 
 ```console
-$ pip install fast-nvim-release              # the newest line (0.12)
-$ pip install "fast-nvim-release==0.11.*"    # the 0.11 line
+$ pip install fast-nvim-release              # the newest Neovim (0.12)
+$ pip install "fast-nvim-release==0.11.*"    # the newest 0.11
 $ fast-nvim-release setup --prefix ~/.local
 installed Neovim v0.11.7 into /home/you/.local
   /home/you/.local/bin/nvim
@@ -30,8 +31,10 @@ installed Neovim v0.11.7 into /home/you/.local
 `pipx install` and `uv tool install` work the same way. With uvx, in one
 command: `uvx --from "fast-nvim-release==0.11.*" fast-nvim-release setup --prefix ~/.local`.
 
-Always pin a line (`==0.11.*`), not an exact version: the line pin follows that
-line's newest release, which is what you want.
+Pin a line (`==0.11.*`) to follow its newest patch, or an exact Neovim
+(`==0.11.7.*`) to stay on that patch. Keep the trailing `.*` either way, so you
+get the newest revision of this tool. (pip allows only one `*`, at the end:
+`==0.11.*` already covers every `0.11.Z.K`.)
 
 ## Who this is for
 
@@ -89,11 +92,13 @@ never GitHub. For machines with no network at all, see
 
 ## Versions
 
-A version is `<Neovim line>.<release>`: `0.12.3` is the third release of the
-0.12 line. A line's release number goes up whenever its wheels change: a new
-Neovim patch, or a fix in this tool. Each line always carries the newest patch
-of its Neovim line, so `pip install "fast-nvim-release==0.12.*"` gets the newest
-0.12. `fast-nvim-release --version` and the
+A version is `<Neovim version>.<revision>`: `0.12.6.1` is Neovim v0.12.6 with
+revision 1 of this tool. A new Neovim patch is released as a new version
+(`0.12.7.1`); a fix in this tool raises the revision for the newest patch of
+every line (`0.10.4.2`, `0.11.7.2`, `0.12.7.2`). Older patches stay on PyPI as
+they were but get no new revisions. So `pip install "fast-nvim-release==0.12.*"`
+gets the newest 0.12 with the newest fixes, and `==0.12.6.*` that exact Neovim.
+`fast-nvim-release --version` and the
 [GitHub releases](https://github.com/nickeisenberg/fast-nvim-release/releases)
 say exactly which Neovim each version carries.
 
@@ -129,7 +134,10 @@ work with the pip that RHEL 8's Python 3.9 ships.
 | `0.12` | 0.12.5 | 0.12.5 |
 
 `neovim-releases` usually trails the main releases by a patch or so, which is
-why 0.12 is 0.12.5 there. Neovim calls these builds unsupported; they are built
+why 0.12 is 0.12.5 there. Those wheels are released under their own Neovim
+version (`0.12.5.1`), and pip on an older system falls back to it on its own
+when the newest version has no wheel it can use; once `neovim-releases` catches
+up, the older-Linux wheels are added to the newer version. Neovim calls these builds unsupported; they are built
 by Neovim's CI from the same sources.
 
 Systems with no Neovim build at all (Alpine/musl, macOS < 11, armv7, and arm64
@@ -171,7 +179,7 @@ in scripts. Without `--prefix` it looks in `~/.local` (on Windows,
 
 ### Stability
 
-The version number names the Neovim line, so it cannot announce breaking
+The version number names the Neovim version, so it cannot announce breaking
 changes in this tool. Instead, the command line is stable: the commands and
 flags above, the prefix layout, and the exit codes (0 success, 1 error, 2 bad
 usage) keep working. New commands or flags may be added; existing ones are not
@@ -211,7 +219,7 @@ PyPI is reachable.
 | Official tarball / AppImage | no | GitHub releases | by hand | any machine with GitHub access |
 | mise / asdf | no | usually GitHub releases | yes | if you already manage tools with them |
 | Neovim setup actions for GitHub Actions | no | usually GitHub releases | per job | GitHub Actions only |
-| fast-nvim-release | no | PyPI or a PyPI mirror | yes, one line per install | CI, no root, fresh servers, restricted networks |
+| fast-nvim-release | no | PyPI or a PyPI mirror | yes, one version per install | CI, no root, fresh servers, restricted networks |
 
 Use something else when you want nightly or a release older than 0.10, when
 your platform has no wheel, or when you want updates to arrive with the rest of

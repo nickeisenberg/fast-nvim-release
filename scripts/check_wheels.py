@@ -3,8 +3,9 @@
 
     python scripts/check_wheels.py [dist/*.whl]
 
-A wheel ``fast_nvim_release-<line>.<k>-py3-none-<tag>.whl`` must carry exactly
-the build ``lines.json`` pins for that line and tag (``build.json`` says so),
+A wheel ``fast_nvim_release-<neovim>.<revision>-py3-none-<tag>.whl`` must carry
+exactly the build ``lines.json`` pins for that line and tag, that Neovim
+version and the current revision (``build.json`` says so),
 with its executable, a complete runtime and Neovim's license.  On Linux the
 binary's glibc requirement must fit the manylinux tag, or pip would install a
 wheel that cannot start.
@@ -23,7 +24,8 @@ from typing import List, Optional, Tuple
 import lines
 
 WHEEL_NAME = re.compile(
-    r"^fast_nvim_release-(?P<line>\d+\.\d+)\.(?P<k>\d+)-py3-none-(?P<tag>.+)\.whl$"
+    r"^fast_nvim_release-(?P<line>\d+\.\d+)\.(?P<patch>\d+)\.(?P<revision>\d+)"
+    r"-py3-none-(?P<tag>.+)\.whl$"
 )
 MANYLINUX = re.compile(r"^manylinux_(\d+)_(\d+)_")
 GLIBC_SYMBOL = re.compile(rb"GLIBC_(\d+)\.(\d+)")
@@ -44,15 +46,16 @@ def check(path: Path, data: Optional[dict] = None) -> List[str]:
     match = WHEEL_NAME.match(path.name)
     if not match:
         return [f"unexpected wheel name: {path.name}"]
-    line, k, tag = match.group("line"), int(match.group("k")), match.group("tag")
-    if line not in data:
+    line, tag = match.group("line"), match.group("tag")
+    version = f"{line}.{match.group('patch')}.{match.group('revision')}"
+    if line not in data["lines"]:
         return [f"{line} is not a line in lines.json"]
-    if k != data[line]["k"]:
-        return [f"version {line}.{k}, but lines.json says {line}.{data[line]['k']}"]
     try:
         spec = lines.find(line, tag, data)
     except KeyError as exc:
         return [exc.args[0]]
+    if version != spec.version:
+        return [f"version {version}, but lines.json says {spec.version} for {tag}"]
 
     problems = []
     with zipfile.ZipFile(path) as wheel:

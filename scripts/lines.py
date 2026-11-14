@@ -1,14 +1,23 @@
 """Build-time view of ``lines.json``: which wheels exist and what each carries.
 
-``lines.json`` lists every supported Neovim line with:
+``lines.json`` holds:
 
-* ``k``: the line's release counter; the package version is ``<line>.<k>``
-  (``0.12.3``).  It goes up whenever anything in that line's wheels changes.
-* ``official``: the build from ``neovim/neovim`` (version, sha256 per
-  platform, and platforms deliberately ``skip``-ped).
-* ``old_glibc`` (optional): the glibc 2.17 build from ``neovim/neovim-releases``.
+* ``revision``: one counter for this project's own code.  A wheel's version is
+  the Neovim version it carries plus the revision: ``0.12.6.1`` is Neovim
+  v0.12.6 with revision 1.  It goes up (``scripts/pins.py bump``) whenever the
+  installed code changes, which re-releases every line's current patch.
+* ``lines``: every supported Neovim line with
 
-Each (line, wheel tag) pair with a pinned build is one wheel.
+  * ``official``: the build from ``neovim/neovim`` (version, sha256 per
+    platform, and platforms deliberately ``skip``-ped);
+  * ``old_glibc`` (optional): the glibc 2.17 build from
+    ``neovim/neovim-releases``, which can lag behind by a patch.  Its wheels
+    then simply belong to the older version (``0.12.5.1``), and pip on an old
+    system falls back to it.
+
+Each (line, wheel tag) pair with a pinned build is one wheel.  A new Neovim
+patch is a new version with the same revision; the old patch's releases stay
+on the index as they are.
 """
 
 from __future__ import annotations
@@ -46,7 +55,7 @@ class Build:
 @dataclass(frozen=True)
 class Wheel:
     line: str  #: e.g. ``0.12``
-    version: str  #: the package version, e.g. ``0.12.3``
+    version: str  #: the package version, e.g. ``0.12.6.1``
     tag: str  #: the wheel's platform tag
     platform: Platform
     build: Build
@@ -55,24 +64,37 @@ class Wheel:
     def label(self) -> str:
         return f"{self.version} {self.tag}"
 
+    @property
+    def filename(self) -> str:
+        return f"fast_nvim_release-{self.version}-py3-none-{self.tag}.whl"
+
 
 def line_key(line: str) -> Tuple[int, ...]:
     return tuple(int(part) for part in line.split("."))
 
 
-def load(path: Path = LINES_FILE) -> Dict[str, dict]:
+def load(path: Path = LINES_FILE) -> dict:
+    """``{"revision": int, "lines": {line: spec}}``, lines oldest first."""
     with path.open(encoding="utf-8") as handle:
         data = json.load(handle)
-    return {line: data[line] for line in sorted(data, key=line_key)}
+    specs = data["lines"]
+    return {
+        "revision": data["revision"],
+        "lines": {k: specs[k] for k in sorted(specs, key=line_key)},
+    }
 
 
-def save(data: Dict[str, dict], path: Path = LINES_FILE) -> None:
-    ordered = {line: data[line] for line in sorted(data, key=line_key)}
+def save(data: dict, path: Path = LINES_FILE) -> None:
+    specs = data["lines"]
+    ordered = {
+        "revision": data["revision"],
+        "lines": {k: specs[k] for k in sorted(specs, key=line_key)},
+    }
     path.write_text(json.dumps(ordered, indent=2) + "\n", encoding="utf-8")
 
 
-def newest_line(data: Optional[Dict[str, dict]] = None) -> str:
-    return list(data or load())[-1]
+def newest_line(data: Optional[dict] = None) -> str:
+    return list((data or load())["lines"])[-1]
 
 
 def builds(spec: dict) -> List[Build]:
@@ -83,12 +105,18 @@ def builds(spec: dict) -> List[Build]:
     ]
 
 
-def wheels(data: Optional[Dict[str, dict]] = None) -> List[Wheel]:
+def package_version(build: Build, revision: int) -> str:
+    """``v0.12.6`` with revision 1 -> ``0.12.6.1``."""
+    return f"{build.version.lstrip('v')}.{revision}"
+
+
+def wheels(data: Optional[dict] = None) -> List[Wheel]:
     """Every wheel ``lines.json`` describes, newest line last."""
+    data = data or load()
     found = []
-    for line, spec in (data or load()).items():
-        version = f"{line}.{spec['k']}"
+    for line, spec in data["lines"].items():
         for build in builds(spec):
+            version = package_version(build, data["revision"])
             for key, platform in PLATFORMS.items():
                 if key not in build.sha256:
                     continue
@@ -97,7 +125,7 @@ def wheels(data: Optional[Dict[str, dict]] = None) -> List[Wheel]:
     return found
 
 
-def find(line: str, tag: str, data: Optional[Dict[str, dict]] = None) -> Wheel:
+def find(line: str, tag: str, data: Optional[dict] = None) -> Wheel:
     """The wheel for ``line`` with platform ``tag``; ``KeyError`` saying what exists."""
     candidates = [wheel for wheel in wheels(data) if wheel.line == line]
     for wheel in candidates:

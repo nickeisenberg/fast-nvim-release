@@ -148,14 +148,14 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
         check_runs(dest / "bin" / wheel.platform.exe, wheel.build.version)
     license_file = dest / f"LICENSE.nvim-{wheel.line}.txt"
     if not license_file.is_file():
-        official = lines.load()[wheel.line]["official"]["version"]
+        official = lines.load()["lines"][wheel.line]["official"]["version"]
         download(LICENSE_URL.format(official), license_file)
 
 
 def main(argv=None) -> int:
     data = lines.load()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--line", choices=list(data), default=lines.newest_line(data))
+    parser.add_argument("--line", choices=list(data["lines"]), default=lines.newest_line(data))
     parser.add_argument("--wheel", help="wheel platform tag (default: the one pip picks here)")
     parser.add_argument("--dest", type=Path, default=DEST, help=f"default: {DEST}")
     args = parser.parse_args(argv)

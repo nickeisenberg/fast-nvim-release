@@ -3,9 +3,10 @@ name: upstream
 # Neovim ships patch releases every few weeks (and its glibc 2.17 builds in
 # neovim-releases follow later), and nothing else here would notice. Every
 # Monday this runs `scripts/pins.py update`: pins move to the newest patches,
-# with the checksums GitHub publishes, and each changed line's `k` goes up.
-# Any change becomes a pull request (branch pins/update) with CI started on
-# it; merging it and running the release workflow publishes those lines.
+# with the checksums GitHub publishes (a new patch is a new package version;
+# the revision stays). Any change becomes a pull request (branch pins/update)
+# with CI started on it; merging it and running the release workflow publishes
+# the new versions.
 #
 # Needs "Allow GitHub Actions to create and approve pull requests" in the
 # repository's Settings > Actions > General.

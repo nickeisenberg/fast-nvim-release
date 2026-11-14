@@ -1,8 +1,8 @@
 """Command line interface: ``fast-nvim-release setup | path | run``.
 
-This is the stable interface.  The package version (``0.12.3``) names the
-Neovim line, so it cannot announce breaking changes: commands and flags are
-only ever added, never removed or changed in meaning.
+This is the stable interface.  The package version (``0.12.6.1``) names the
+Neovim version inside, so it cannot announce breaking changes: commands and
+flags are only ever added, never removed or changed in meaning.
 """
 
 from __future__ import annotations
@@ -81,8 +81,9 @@ def cmd_run(argv: Sequence[str]) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
-        description="Install the Neovim bundled in this package. Each package version "
-        'carries one Neovim line: pip install "fast-nvim-release==0.11.*" picks it.',
+        description="Install the Neovim bundled in this package. The package version is "
+        'the Neovim version plus a revision: pip install "fast-nvim-release==0.11.*" '
+        'picks a line, "fast-nvim-release==0.11.7.*" an exact Neovim.',
         epilog=f"example: {PROG} setup --prefix ~/.local",
     )
     parser.add_argument("--version", action="version", version=_version_text())
