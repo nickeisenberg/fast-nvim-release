@@ -21,6 +21,3 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-# keep the package marker so the tree exists before vendoring
-!src/fast_nvim_release/_nvim/.gitkeep

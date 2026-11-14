@@ -8,22 +8,15 @@ and, in the wheels for older Linux systems, from
 [`neovim/neovim-releases`](https://github.com/neovim/neovim-releases), where the
 Neovim project publishes builds for glibc 2.17.
 
-The release lines shipped, and the exact builds, are pinned in `lines.json`;
+The Neovim lines shipped, and the exact builds, are pinned in `lines.json`;
 each wheel also records its build in `fast_nvim_release/_nvim/build.json`.
-At the time of writing each line is pinned to:
-
-| Release | Neovim version |
-| --- | --- |
-| 0.10 | v0.10.4 |
-| 0.11 | v0.11.7 |
-| 0.12 | v0.12.6 |
 
 * Neovim: <https://github.com/neovim/neovim>
 * License: Apache License 2.0, except for parts contributed under the Vim
-  license. The full text for each release line ships as
-  `fast_nvim_release/_nvim/LICENSE.nvim-<release>.txt` (fetched from that
-  release's tag by `scripts/fetch_nvim.py`), and the Vim license is also present
-  in the runtime as `share/nvim/runtime/doc/uganda.txt`.
+  license. Each wheel ships the full text for its line as
+  `fast_nvim_release/_nvim/LICENSE.nvim-<line>.txt` (taken from the tag of the
+  line's official build when the line is added), and the Vim license is also
+  present in the runtime as `share/nvim/runtime/doc/uganda.txt`.
 * Each vendored build is extracted from the release archive whose sha256 is
   pinned in `lines.json`.
 

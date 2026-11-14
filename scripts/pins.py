@@ -33,8 +33,6 @@ from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS
 API = "https://api.github.com/repos/{}/releases?per_page=100&page={}"
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SHA256 = re.compile(r"\b([0-9a-f]{64})\b")
-LICENSE_URL = "https://raw.githubusercontent.com/neovim/neovim/{}/LICENSE.txt"
-LICENSE_DIR = lines.ROOT / "src" / "fast_nvim_release" / "_nvim"
 
 
 # --------------------------------------------------------------------------
@@ -82,6 +80,12 @@ def checksums(release: dict, platform_keys) -> Dict[str, str]:
     for key in platform_keys:
         asset = assets.get(PLATFORMS[key].asset)
         if asset is None:
+            # the pin still moves; the diff in the pins PR shows the dropped platform
+            print(
+                f"warning: {release['tag_name']} has no {PLATFORMS[key].asset}; "
+                f"{key} gets no wheel for it",
+                file=sys.stderr,
+            )
             continue
         digest = asset.get("digest") or ""
         if digest.startswith("sha256:"):
@@ -135,9 +139,9 @@ def apply(data: dict, upstream: Dict[str, Dict[str, dict]], changes) -> List[str
 
 
 def ensure_license(line: str, data: dict) -> None:
-    path = LICENSE_DIR / f"LICENSE.nvim-{line}.txt"
+    path = lines.NVIM_DIR / lines.license_name(line)
     if not path.is_file():
-        path.write_bytes(_get(LICENSE_URL.format(data["lines"][line]["official"]["version"])))
+        path.write_bytes(_get(lines.license_url(line, data)))
 
 
 def lagging(data: dict) -> List[str]:

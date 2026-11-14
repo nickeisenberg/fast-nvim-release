@@ -34,6 +34,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS, Platform  # noqa: E402
 
 LINES_FILE = ROOT / "lines.json"
+#: where fetch_nvim.py unpacks a build, and where the tracked licenses live
+NVIM_DIR = ROOT / "src" / "fast_nvim_release" / "_nvim"
 REPOS = {"official": "neovim/neovim", "old_glibc": "neovim/neovim-releases"}
 
 
@@ -73,10 +75,7 @@ def line_key(line: str) -> Tuple[int, ...]:
     return tuple(int(part) for part in line.split("."))
 
 
-def load(path: Path = LINES_FILE) -> dict:
-    """``{"revision": int, "lines": {line: spec}}``, lines oldest first."""
-    with path.open(encoding="utf-8") as handle:
-        data = json.load(handle)
+def _ordered(data: dict) -> dict:
     specs = data["lines"]
     return {
         "revision": data["revision"],
@@ -84,13 +83,25 @@ def load(path: Path = LINES_FILE) -> dict:
     }
 
 
+def load(path: Path = LINES_FILE) -> dict:
+    """``{"revision": int, "lines": {line: spec}}``, lines oldest first."""
+    with path.open(encoding="utf-8") as handle:
+        return _ordered(json.load(handle))
+
+
 def save(data: dict, path: Path = LINES_FILE) -> None:
-    specs = data["lines"]
-    ordered = {
-        "revision": data["revision"],
-        "lines": {k: specs[k] for k in sorted(specs, key=line_key)},
-    }
-    path.write_text(json.dumps(ordered, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(_ordered(data), indent=2) + "\n", encoding="utf-8")
+
+
+def license_name(line: str) -> str:
+    """The license file each wheel of ``line`` carries, tracked in ``NVIM_DIR``."""
+    return f"LICENSE.nvim-{line}.txt"
+
+
+def license_url(line: str, data: dict) -> str:
+    """Neovim's license at the tag of the line's official build."""
+    tag = data["lines"][line]["official"]["version"]
+    return f"https://raw.githubusercontent.com/neovim/neovim/{tag}/LICENSE.txt"
 
 
 def newest_line(data: Optional[dict] = None) -> str:

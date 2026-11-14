@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import re
+import struct
 import tarfile
 import zipfile
 
@@ -163,7 +164,7 @@ def test_a_verified_cached_archive_is_reused(tmp_path, monkeypatch):
 @NEEDS_TAR_FILTERS
 def test_fetch_writes_build_json_and_replaces_a_previous_build(tmp_path, monkeypatch):
     dest = tmp_path / "_nvim"
-    (dest / "0.12" / "linux-x86_64").mkdir(parents=True)  # a 0.3-era layout
+    (dest / "0.12" / "linux-x86_64").mkdir(parents=True)  # leftovers
     (dest / "LICENSE.nvim-0.12.txt").write_text("Apache", encoding="utf-8")
     archive = _tar(tmp_path / "a.tar.gz", NVIM_TREE)
     monkeypatch.setattr(fetch_nvim, "archive", lambda build, platform: archive)
@@ -196,11 +197,34 @@ def test_a_build_that_cannot_run_here_says_why(tmp_path):
 # --------------------------------------------------------------------------
 # check_wheels
 # --------------------------------------------------------------------------
-def fake_wheel(tmp_path, wheel, glibc=None, runtime=1600, info_override=None, version=None):
+def fake_binary(key, glibc=b"GLIBC_2.34", macos=(11, 0)):
+    """The start of an executable for platform ``key``, as far as check_wheels reads it."""
+    system, arch = key.split("-")
+    if system == "linux":
+        return (
+            b"\x7fELF"
+            + bytes(14)
+            + struct.pack("<H", {"x86_64": 0x3E, "arm64": 0xB7}[arch])
+            + glibc
+        )
+    if system == "macos":
+        cputype = {"x86_64": 0x01000007, "arm64": 0x0100000C}[arch]
+        minos = macos[0] << 16 | macos[1] << 8
+        header = struct.pack("<8I", 0xFEEDFACF, cputype, 0, 2, 1, 24, 0, 0)
+        return header + struct.pack("<6I", 0x32, 24, 1, minos, 0, 0)
+    machine = {"x86_64": 0x8664, "arm64": 0xAA64}[arch]
+    return b"MZ" + bytes(0x3A) + struct.pack("<I", 0x40) + b"PE\0\0" + struct.pack("<H", machine)
+
+
+def fake_wheel(
+    tmp_path, wheel, glibc=None, runtime=1600, info_override=None, version=None, binary=None
+):
     version = version or wheel.version
     path = tmp_path / f"fast_nvim_release-{version}-py3-none-{wheel.tag}.whl"
     if glibc is None:
         glibc = b"GLIBC_2.17" if "2_17" in wheel.tag else b"GLIBC_2.34"
+    if binary is None:
+        binary = fake_binary(wheel.platform.key, glibc)
     info = {
         "version": wheel.version,
         "line": wheel.line,
@@ -214,7 +238,7 @@ def fake_wheel(tmp_path, wheel, glibc=None, runtime=1600, info_override=None, ve
         zf.writestr(root + "build.json", json.dumps(info))
         exe = zipfile.ZipInfo(f"{root}bin/{wheel.platform.exe}")
         exe.external_attr = 0o755 << 16
-        zf.writestr(exe, b"\x7fELF " + glibc)
+        zf.writestr(exe, binary)
         for n in range(runtime):
             zf.writestr(f"{root}share/nvim/runtime/f{n}.vim", b"")
         zf.writestr(f"{root}LICENSE.nvim-{wheel.line}.txt", b"Apache")
@@ -245,6 +269,28 @@ def test_a_broken_wheel_fails(tmp_path, kwargs, problem):
         fake_wheel(tmp_path, lines.find("0.12", LINUX.wheel_tag), **kwargs)
     )
     assert any(problem in item for item in problems), problems
+
+
+@pytest.mark.parametrize(
+    "line, tag, binary, problem",
+    [
+        ("0.12", LINUX.wheel_tag, fake_binary("linux-arm64"), "built for arm64, not x86_64"),
+        ("0.12", "win_arm64", fake_binary("windows-x86_64"), "built for x86_64, not arm64"),
+        ("0.12", "macosx_11_0_arm64", b"#!/bin/sh\n", "an unknown CPU"),
+        ("0.12", "macosx_11_0_arm64", fake_binary("macos-arm64", macos=(13, 0)), "macOS (13, 0)"),
+    ],
+)
+def test_an_executable_that_cannot_run_under_its_tag_fails(tmp_path, line, tag, binary, problem):
+    problems = check_wheels.check(fake_wheel(tmp_path, lines.find(line, tag), binary=binary))
+    assert any(problem in item for item in problems), problems
+
+
+def test_a_wheel_carries_only_its_own_lines_license(tmp_path):
+    path = fake_wheel(tmp_path, lines.find("0.12", LINUX.wheel_tag))
+    with zipfile.ZipFile(path, "a") as zf:
+        zf.writestr("fast_nvim_release/_nvim/LICENSE.nvim-0.10.txt", b"Apache")
+    problems = check_wheels.check(path)
+    assert any("other lines' licenses" in item for item in problems), problems
 
 
 def test_an_old_glibc_wheel_must_not_need_a_newer_glibc(tmp_path):
@@ -361,6 +407,15 @@ def test_a_release_without_published_checksums_stops_the_update(monkeypatch):
     upstream = {"official": {"v0.12.99": _release("v0.12.99", list(PLATFORMS), digests=False)}}
     with pytest.raises(SystemExit, match="no published checksum"):
         pins.apply(data, upstream, [("0.12", "official", "v0.12.99")])
+
+
+def test_a_platform_missing_from_a_release_is_a_warning(capsys):
+    data = copy.deepcopy(lines.load())
+    without_windows_arm = [key for key in PLATFORMS if key != "windows-arm64"]
+    upstream = {"official": {"v0.12.99": _release("v0.12.99", without_windows_arm)}}
+    pins.apply(data, upstream, [("0.12", "official", "v0.12.99")])
+    assert "windows-arm64" not in data["lines"]["0.12"]["official"]["sha256"]
+    assert "warning: v0.12.99 has no nvim-win-arm64.zip" in capsys.readouterr().err
 
 
 def test_bump_raises_the_revision_of_every_line(tmp_path):

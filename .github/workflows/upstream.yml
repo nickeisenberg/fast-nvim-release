@@ -43,11 +43,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet; then echo "every pin is current"; exit 0; fi
+          # a new line also brings its (untracked) LICENSE.nvim-<line>.txt
+          git add lines.json src/fast_nvim_release/_nvim/
+          if git diff --cached --quiet; then echo "every pin is current"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C pins/update
-          git commit -am "pins: move to Neovim's newest patches"
+          git commit -m "pins: move to Neovim's newest patches"
           git push --force origin pins/update
           gh pr view pins/update >/dev/null 2>&1 || gh pr create --head pins/update \
             --title "pins: move to Neovim's newest patches" \

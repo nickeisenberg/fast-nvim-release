@@ -1,8 +1,9 @@
 """fast-nvim-release -- Neovim from PyPI.
 
-Each package version carries one Neovim line, ``<line>.<k>`` (``0.12.3`` is
-the third release of the 0.12 line): ``pip install "fast-nvim-release==0.12.*"``
-gets it, and ``fast-nvim-release setup --prefix DIR`` installs it.
+A package version is the Neovim version it carries plus a revision of this
+tool (``0.12.6.1`` is Neovim v0.12.6, revision 1):
+``pip install "fast-nvim-release==0.12.*"`` gets the newest 0.12, and
+``fast-nvim-release setup --prefix DIR`` installs it.
 """
 
 from __future__ import annotations

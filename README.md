@@ -98,15 +98,16 @@ revision 1 of this tool. A new Neovim patch is released as a new version
 every line (`0.10.4.2`, `0.11.7.2`, `0.12.7.2`). Older patches stay on PyPI as
 they were but get no new revisions. So `pip install "fast-nvim-release==0.12.*"`
 gets the newest 0.12 with the newest fixes, and `==0.12.6.*` that exact Neovim.
-`fast-nvim-release --version` and the
+Each line carries its newest Neovim patch; `fast-nvim-release --version`, the
 [GitHub releases](https://github.com/nickeisenberg/fast-nvim-release/releases)
+and [`lines.json`](https://github.com/nickeisenberg/fast-nvim-release/blob/master/lines.json)
 say exactly which Neovim each version carries.
 
-| Line | Neovim | Linux x86_64 | Linux arm64 | macOS | Windows x64 | Windows arm64 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `0.10` | 0.10.4 | ✓ | — * | ✓ | ✓ | — (no official build) |
-| `0.11` | 0.11.7 | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `0.12` | 0.12.6 | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Line | Linux x86_64 | Linux arm64 | macOS | Windows x64 | Windows arm64 |
+| --- | --- | --- | --- | --- | --- |
+| `0.10` | ✓ | — * | ✓ | ✓ | — (no official build) |
+| `0.11` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `0.12` | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 \* the official 0.10 arm64 build needs glibc 2.38, while every other Linux build
 needs only 2.34.
@@ -129,19 +130,20 @@ work with the pip that RHEL 8's Python 3.9 ships.
 
 | Line | Older-Linux x86_64 | Older-Linux arm64 |
 | --- | --- | --- |
-| `0.10` | 0.10.4 | — |
-| `0.11` | 0.11.7 | — |
-| `0.12` | 0.12.5 | 0.12.5 |
+| `0.10` | ✓ | — |
+| `0.11` | ✓ | — |
+| `0.12` | ✓ | ✓ |
 
-`neovim-releases` usually trails the main releases by a patch or so, which is
-why 0.12 is 0.12.5 there. Those wheels are released under their own Neovim
-version (`0.12.5.1`), and pip on an older system falls back to it on its own
-when the newest version has no wheel it can use; once `neovim-releases` catches
-up, the older-Linux wheels are added to the newer version. Neovim calls these builds unsupported; they are built
-by Neovim's CI from the same sources.
+`neovim-releases` often trails the main releases by a patch or so. Its wheels
+are then released under their own Neovim version (official v0.12.6, older-Linux
+v0.12.5: `0.12.5.1`), and pip on an older system falls back to that version on
+its own when the newest one has no wheel it can use; once `neovim-releases`
+catches up, the older-Linux wheels are added to the newer version. Neovim calls
+these builds unsupported; they are built by Neovim's CI from the same sources.
 
-Systems with no Neovim build at all (Alpine/musl, macOS < 11, armv7, and arm64
-with glibc < 2.34 for 0.10/0.11) get no wheel ("no matching distribution").
+Systems with no Neovim build at all (Alpine/musl, macOS < 11, armv7, Linux
+arm64 for 0.10, and Linux arm64 with glibc < 2.34 for 0.11) get no wheel ("no
+matching distribution").
 
 ## Commands
 

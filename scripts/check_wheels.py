@@ -6,9 +6,9 @@
 A wheel ``fast_nvim_release-<neovim>.<revision>-py3-none-<tag>.whl`` must carry
 exactly the build ``lines.json`` pins for that line and tag, that Neovim
 version and the current revision (``build.json`` says so),
-with its executable, a complete runtime and Neovim's license.  On Linux the
-binary's glibc requirement must fit the manylinux tag, or pip would install a
-wheel that cannot start.
+with its executable, a complete runtime and its line's Neovim license.  The
+executable must be built for the tag's CPU, and its glibc (Linux) or macOS
+requirement must fit the tag, or pip would install a wheel that cannot start.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import struct
 import sys
 import zipfile
 from pathlib import Path
@@ -28,7 +29,17 @@ WHEEL_NAME = re.compile(
     r"-py3-none-(?P<tag>.+)\.whl$"
 )
 MANYLINUX = re.compile(r"^manylinux_(\d+)_(\d+)_")
+MACOSX = re.compile(r"^macosx_(\d+)_(\d+)_")
 GLIBC_SYMBOL = re.compile(rb"GLIBC_(\d+)\.(\d+)")
+#: (format, machine code) -> CPU, as the platform keys name it
+MACHINES = {
+    ("elf", 0x3E): "x86_64",
+    ("elf", 0xB7): "arm64",
+    ("macho", 0x01000007): "x86_64",
+    ("macho", 0x0100000C): "arm64",
+    ("pe", 0x8664): "x86_64",
+    ("pe", 0xAA64): "arm64",
+}
 PAYLOAD = "fast_nvim_release/_nvim/"
 PYPI_MAX_BYTES = 100 * 1024 * 1024
 #: 0.10 ships ~1900 runtime files, 0.12 ~2100; far fewer means the runtime is missing
@@ -39,6 +50,44 @@ def glibc_floor(binary: bytes) -> Optional[Tuple[int, int]]:
     """The newest ``GLIBC_x.y`` symbol version an ELF binary requires."""
     found = {(int(a), int(b)) for a, b in GLIBC_SYMBOL.findall(binary)}
     return max(found) if found else None
+
+
+def cpu(binary: bytes) -> Optional[str]:
+    """The CPU a little-endian ELF, thin 64-bit Mach-O or PE executable is built for."""
+    try:
+        if binary[:4] == b"\x7fELF":
+            return MACHINES.get(("elf", struct.unpack_from("<H", binary, 18)[0]))
+        if binary[:4] == b"\xcf\xfa\xed\xfe":
+            return MACHINES.get(("macho", struct.unpack_from("<I", binary, 4)[0]))
+        if binary[:2] == b"MZ":
+            offset = struct.unpack_from("<I", binary, 0x3C)[0]
+            if binary[offset : offset + 4] == b"PE\0\0":
+                return MACHINES.get(("pe", struct.unpack_from("<H", binary, offset + 4)[0]))
+    except struct.error:
+        pass
+    return None
+
+
+def macos_floor(binary: bytes) -> Optional[Tuple[int, int]]:
+    """The minimum macOS a thin 64-bit Mach-O executable declares."""
+    try:
+        if binary[:4] != b"\xcf\xfa\xed\xfe":
+            return None
+        ncmds = struct.unpack_from("<I", binary, 16)[0]
+        offset = 32  # the 64-bit header
+        for _ in range(ncmds):
+            cmd, size = struct.unpack_from("<II", binary, offset)
+            if cmd == 0x32:  # LC_BUILD_VERSION: platform, then minos
+                version = struct.unpack_from("<I", binary, offset + 12)[0]
+            elif cmd == 0x24:  # LC_VERSION_MIN_MACOSX
+                version = struct.unpack_from("<I", binary, offset + 8)[0]
+            else:
+                offset += size
+                continue
+            return (version >> 16, (version >> 8) & 0xFF)
+    except struct.error:
+        pass
+    return None
 
 
 def check(path: Path, data: Optional[dict] = None) -> List[str]:
@@ -75,20 +124,37 @@ def check(path: Path, data: Optional[dict] = None) -> List[str]:
         runtime = sum(1 for name in names if name.startswith(f"{PAYLOAD}share/nvim/runtime/"))
         if runtime < MIN_RUNTIME_FILES:
             problems.append(f"only {runtime} runtime files")
-        if f"{PAYLOAD}LICENSE.nvim-{line}.txt" not in names:
-            problems.append(f"missing {PAYLOAD}LICENSE.nvim-{line}.txt")
+        license_file = f"{PAYLOAD}{lines.license_name(line)}"
+        if license_file not in names:
+            problems.append(f"missing {license_file}")
+        others = sorted(
+            n for n in names if n.startswith(f"{PAYLOAD}LICENSE.nvim-") and n != license_file
+        )
+        if others:
+            problems.append(f"carries other lines' licenses: {', '.join(others)}")
         if exe not in names:
             problems.append(f"missing {exe}")
         else:
             mode = wheel.getinfo(exe).external_attr >> 16
             if not exe.endswith(".exe") and mode and not mode & 0o111:
                 problems.append(f"{exe} is not executable")
+            binary = wheel.read(exe)
+            arch = spec.platform.key.rsplit("-", 1)[1]
+            built_for = cpu(binary)
+            if built_for != arch:
+                problems.append(f"{exe} is built for {built_for or 'an unknown CPU'}, not {arch}")
             manylinux = MANYLINUX.match(tag)
             if manylinux:
                 promised = (int(manylinux.group(1)), int(manylinux.group(2)))
-                needed = glibc_floor(wheel.read(exe))
+                needed = glibc_floor(binary)
                 if needed is None or needed > promised:
                     problems.append(f"{exe} needs glibc {needed}, the tag promises {promised}")
+            macosx = MACOSX.match(tag)
+            if macosx:
+                promised = (int(macosx.group(1)), int(macosx.group(2)))
+                needed = macos_floor(binary)
+                if needed is None or needed > promised:
+                    problems.append(f"{exe} needs macOS {needed}, the tag promises {promised}")
 
         meta = next((n for n in names if n.endswith(".dist-info/WHEEL")), None)
         text = wheel.read(meta).decode() if meta else ""

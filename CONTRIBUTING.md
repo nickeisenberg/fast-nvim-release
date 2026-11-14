@@ -35,10 +35,11 @@ scripts/release_notes.py            one GitHub release per published version
 
 A package version is `<Neovim version>.<revision>` (`0.12.6.1`): the exact
 Neovim inside, and the `revision` of this project's code from `lines.json`.
-Each line carries the newest patch of its Neovim line: the official build (`neovim/neovim`) for six platforms, plus,
-where Neovim publishes one, the glibc 2.17 build (`neovim/neovim-releases`)
-for older Linux, in wheels tagged `manylinux_2_17_*.manylinux2014_*`. pip
-prefers the `manylinux_2_34` wheel wherever it can run.
+Each line carries the newest patch of its Neovim line: the official build
+(`neovim/neovim`) for six platforms, plus, where Neovim publishes one, the
+glibc 2.17 build (`neovim/neovim-releases`) for older Linux, in wheels tagged
+`manylinux_2_17_*.manylinux2014_*`. pip prefers the `manylinux_2_34` wheel
+wherever it can run.
 
 A new Neovim patch is a new version by itself; the revision stays. The
 revision goes up only when the installed code changes, and then every line's
@@ -69,7 +70,7 @@ which `setup.py` reads. On a Linux older than glibc 2.34 the default is the
 old-glibc wheel, so the same two commands work there. Archives are cached in
 `~/.cache/fast-nvim-release` (`FAST_NVIM_RELEASE_CACHE_DIR`) and checked against
 `lines.json` every time. The `LICENSE.nvim-<line>.txt` files in `_nvim/` are
-tracked, because every wheel must ship its line's license.
+tracked, because every wheel must ship its line's license (and only that one).
 
 ## When Neovim ships a patch (or a new line)
 
@@ -82,16 +83,23 @@ a pull request (branch `pins/update`) with CI started on it. Review
 By hand: `python scripts/pins.py check` reports, `python scripts/pins.py update`
 edits `lines.json` the same way.
 
-Check a new line's glibc and macOS floor: `check_wheels.py` fails if a Linux
-build needs a newer glibc than its tag, and for macOS
-`otool -l bin/nvim | grep -A3 LC_BUILD_VERSION` shows `minos` (the tags promise
-11.0). A build that cannot meet its tag goes in that build's `skip` list in
-`lines.json` (0.10's arm64 build needs glibc 2.38, for example).
+A new line's builds are checked against their tags: `check_wheels.py` fails
+if an executable is built for another CPU, or needs a newer glibc or macOS
+than its tag promises. A build that cannot meet its tag goes in that build's
+`skip` list in `lines.json` (0.10's arm64 build needs glibc 2.38, for
+example). If a release lacks a platform's archive, `pins.py update` warns and
+that platform gets no wheel for the patch; the pins PR shows it as a removed
+checksum.
+
+The README's platform tables are written by hand: update them when a line is
+added or a platform changes.
 
 ## When our code changes
 
-Only changes to the installed package (`src/fast_nvim_release/`) need a
-release; build scripts, CI and docs do not. Batch fixes, then:
+Changes to what ends up in a wheel need a release: the installed package
+(`src/fast_nvim_release/`), and the metadata from `pyproject.toml`,
+`setup.py` and `README.md` (the PyPI page). Build scripts, CI and other docs
+do not. Batch fixes, then:
 
 ```console
 $ python scripts/pins.py bump     # revision + 1: every line's current patch
@@ -106,7 +114,13 @@ It builds every wheel in `lines.json` that index does not have, validates and
 smoke-tests them, and uploads them. Publishing to PyPI also creates one GitHub
 release per version (or adds to it, when wheels join an existing version),
 listing the exact Neovim in each wheel. An index never accepts the same file
-twice; rehearse on TestPyPI first.
+twice; rehearse on TestPyPI first. The workflow refuses to run from any
+branch but master. Only wheels are published, never an sdist: pip on an older
+Linux relies on skipping versions without a wheel for it.
+
+If only the GitHub release job fails, re-run the failed jobs of that run (its
+wheels artifact lasts 14 days); a new run would find nothing to publish and
+skip the release notes.
 
 One-time setup on each index (Your account > Publishing > add a pending
 publisher, or the project's Publishing settings): repository

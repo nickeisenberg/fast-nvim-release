@@ -30,7 +30,7 @@ from lines import Wheel
 
 from fast_nvim_release.platforms import host_wheel_tag
 
-NVIM = Path("src") / "fast_nvim_release" / "_nvim"
+NVIM = lines.NVIM_DIR.relative_to(lines.ROOT)
 IGNORE = shutil.ignore_patterns(
     "_nvim", ".git", "build", "dist", "*.egg-info", "__pycache__", ".*cache", ".venv", "venv"
 )
@@ -74,8 +74,9 @@ def build(wheel: Wheel, outdir: Path) -> Path:
         work = Path(tmp) / "src-tree"
         shutil.copytree(lines.ROOT, work, ignore=IGNORE)
         (work / NVIM).mkdir()
-        for tracked in (lines.ROOT / NVIM).glob("LICENSE.nvim-*.txt"):
-            shutil.copy2(tracked, work / NVIM / tracked.name)
+        license_file = lines.NVIM_DIR / lines.license_name(wheel.line)
+        if license_file.is_file():  # else fetch_nvim.py downloads it
+            shutil.copy2(license_file, work / NVIM / license_file.name)
         fetch = [
             sys.executable,
             "scripts/fetch_nvim.py",

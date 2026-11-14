@@ -121,20 +121,6 @@ def test_an_interrupted_install_can_be_rerun_without_force(fake_bundle, host, pr
     assert (prefix / "bin" / host.exe).is_file()
 
 
-@pytest.mark.parametrize("old_name", ["0.10-{key}.json", "install.json"])
-def test_prefixes_from_older_versions_are_recognised(fake_bundle, host, prefix, old_name):
-    """0.2.x wrote <release>-<platform>.json; 0.3.x install.json with a release field."""
-    (prefix / "bin").mkdir(parents=True)
-    (prefix / "bin" / host.exe).write_text("old nvim", encoding="utf-8")
-    (prefix / "share" / "nvim" / "runtime").mkdir(parents=True)
-    old = prefix / bundle.MARKER_DIR / old_name.format(key=host.key)
-    old.parent.mkdir(parents=True, exist_ok=True)
-    old.write_text(json.dumps({"release": "0.10", "bin": [host.exe]}), encoding="utf-8")
-    bundle.install(prefix)  # no --force needed
-    assert [p.name for p in (prefix / bundle.MARKER_DIR).glob("*.json")] == ["install.json"]
-    assert bundle.installed(prefix)["line"] == "0.12"
-
-
 @pytest.mark.parametrize("names", ["nvim", ["../../escape", "/abs", "a\\b", ".."]])
 def test_marker_bin_names_cannot_reach_outside_bin(fake_bundle, prefix, names):
     victim = prefix / "escape"

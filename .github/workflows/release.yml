@@ -5,6 +5,13 @@ name: release
 # patch, every line after a revision bump, or old-glibc wheels joining an
 # existing version. Publishing is irreversible (an index never takes the same
 # file twice); rehearse on TestPyPI first.
+#
+# Only wheels are ever published, never an sdist: pip on an older Linux skips
+# a version with no wheel it can use (0.12.6.1) and falls back to the one that
+# has its old-glibc wheels (0.12.5.1); with an sdist it would try to build it.
+#
+# If only the GitHub release job fails, use "Re-run failed jobs" (the wheels
+# artifact lasts 14 days): a fresh run finds nothing unpublished and skips it.
 
 on:
   workflow_dispatch:
@@ -34,6 +41,11 @@ jobs:
     outputs:
       built: ${{ steps.build.outputs.built }}
     steps:
+      - name: release only what master has
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::release runs from master only, not ${GITHUB_REF}"
+          exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false

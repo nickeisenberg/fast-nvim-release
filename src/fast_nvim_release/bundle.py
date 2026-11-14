@@ -19,7 +19,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, Iterable, List, Set, Union
+from typing import Dict, Iterable, Set, Union
 
 from .platforms import PLATFORMS, Platform, host_platform
 
@@ -28,11 +28,8 @@ BUNDLE_ROOT = Path(__file__).resolve().parent / "_nvim"
 #: What ``setup`` puts into a prefix, besides the marker.
 PARTS = ("bin", "lib/nvim", "share/nvim/runtime")
 
-#: ``<prefix>/share/fast-nvim-release/``: records what this tool installed.
-#: Releases before 0.4 wrote ``<release>-<platform>.json`` files here; every
-#: ``*.json`` in the directory is read, so those prefixes stay recognised.
-MARKER_DIR = Path("share") / "fast-nvim-release"
-MARKER = MARKER_DIR / "install.json"
+#: Records what this tool installed into a prefix.
+MARKER = Path("share") / "fast-nvim-release" / "install.json"
 
 
 class FastNvimError(RuntimeError):
@@ -89,42 +86,31 @@ def default_prefix() -> Path:
     return normalize(Path.home() / ".local")
 
 
-def _markers(prefix: Path) -> List[Dict[str, object]]:
-    found = []
-    for path in sorted((prefix / MARKER_DIR).glob("*.json")):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(data, dict):
-            found.append(data)
-    return found
-
-
 def installed(prefix: Path) -> Dict[str, object]:
     """What this tool installed into ``prefix`` (``{}`` if nothing)."""
-    markers = _markers(prefix)
-    return markers[0] if markers else {}
+    try:
+        data = json.loads((prefix / MARKER).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _owned_bin_names(prefix: Path) -> Set[str]:
-    """Entries of ``<prefix>/bin`` that a marker says this tool put there.
+    """Entries of ``<prefix>/bin`` that the marker says this tool put there.
 
-    Markers are files users can edit, so only plain file names count.
+    The marker is a file users can edit, so only plain file names count.
     """
-    names: Set[str] = set()
-    for data in _markers(prefix):
-        listed = data.get("bin")
-        if isinstance(listed, list):
-            names.update(
-                name
-                for name in listed
-                if isinstance(name, str)
-                and name not in ("", ".", "..")
-                and "/" not in name
-                and "\\" not in name
-            )
-    return names
+    listed = installed(prefix).get("bin")
+    if not isinstance(listed, list):
+        return set()
+    return {
+        name
+        for name in listed
+        if isinstance(name, str)
+        and name not in ("", ".", "..")
+        and "/" not in name
+        and "\\" not in name
+    }
 
 
 def _remove(path: Path) -> None:
@@ -166,7 +152,7 @@ def install(prefix: Path, *, force: bool = False) -> Path:
     prefix = normalize(prefix)
     names = sorted(entry.name for entry in (source / "bin").iterdir())
     owned = _owned_bin_names(prefix)
-    managed = bool(_markers(prefix))
+    managed = bool(installed(prefix))
 
     if not force:
         # Windows file names ignore case, and releases differ in how they spell
@@ -201,9 +187,6 @@ def install(prefix: Path, *, force: bool = False) -> Path:
         _copy(source / "bin" / name, prefix / "bin" / name)
 
     _write_marker(prefix, names)
-    for old in (prefix / MARKER_DIR).glob("*.json"):  # markers from before 0.4
-        if old.name != MARKER.name:
-            old.unlink()
     return prefix / "bin" / exe.name
 
 

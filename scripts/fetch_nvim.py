@@ -33,8 +33,7 @@ from lines import Build, Wheel
 from fast_nvim_release.bundle import PARTS
 from fast_nvim_release.platforms import Platform, host_platform, host_wheel_tag
 
-DEST = lines.ROOT / "src" / "fast_nvim_release" / "_nvim"
-LICENSE_URL = "https://raw.githubusercontent.com/neovim/neovim/{}/LICENSE.txt"
+DEST = lines.NVIM_DIR
 #: files in ``DEST`` that are tracked in git, not produced by this script
 TRACKED = (".gitkeep",)
 
@@ -146,10 +145,9 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
     (dest / "build.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
     if runs_here(wheel):
         check_runs(dest / "bin" / wheel.platform.exe, wheel.build.version)
-    license_file = dest / f"LICENSE.nvim-{wheel.line}.txt"
+    license_file = dest / lines.license_name(wheel.line)
     if not license_file.is_file():
-        official = lines.load()["lines"][wheel.line]["official"]["version"]
-        download(LICENSE_URL.format(official), license_file)
+        download(lines.license_url(wheel.line, lines.load()), license_file)
 
 
 def main(argv=None) -> int:
