@@ -7,13 +7,15 @@
 
 Each wheel is built in a throwaway copy of the source tree, so builds never mix
 and the repo's own ``_nvim`` directory is left alone.  ``--skip-published``
-leaves out every version already on that index: a release publishes exactly
-the lines whose ``k`` was bumped.
+leaves out every wheel file already on that index, so a release publishes
+exactly what is new: a new Neovim patch, every line after a revision bump, or
+old-glibc wheels added to a version once ``neovim-releases`` catches up.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -21,7 +23,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Set
 
 import lines
 from lines import Wheel
@@ -34,16 +36,17 @@ IGNORE = shutil.ignore_patterns(
 )
 
 
-def published(index: str, version: str) -> bool:
-    """True if ``version`` of fast-nvim-release is on ``index`` (a PyPI-like site)."""
+def published(index: str, version: str) -> Set[str]:
+    """The wheel files of ``version`` already on ``index`` (a PyPI-like site)."""
     url = f"{index.rstrip('/')}/pypi/fast-nvim-release/{version}/json"
     try:
-        with urllib.request.urlopen(url, timeout=30):
-            return True
+        with urllib.request.urlopen(url, timeout=30) as response:
+            release = json.load(response)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            return False
+            return set()
         raise
+    return {entry["filename"] for entry in release.get("urls", [])}
 
 
 def select(line_keys: List[str], tags: List[str], skip_published: str = "") -> List[Wheel]:
@@ -55,10 +58,13 @@ def select(line_keys: List[str], tags: List[str], skip_published: str = "") -> L
         if (not line_keys or wheel.line in line_keys) and (not tags or wheel.tag in wanted_tags)
     ]
     if skip_published:
-        done = {v for v in {w.version for w in chosen} if published(skip_published, v)}
-        for version in sorted(done):
-            print(f"skipping {version}: already on {skip_published}")
-        chosen = [wheel for wheel in chosen if wheel.version not in done]
+        on_index: Dict[str, Set[str]] = {
+            version: published(skip_published, version) for version in {w.version for w in chosen}
+        }
+        for wheel in chosen:
+            if wheel.filename in on_index[wheel.version]:
+                print(f"skipping {wheel.label}: already on {skip_published}")
+        chosen = [w for w in chosen if w.filename not in on_index[w.version]]
     return chosen
 
 

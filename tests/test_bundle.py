@@ -49,7 +49,7 @@ def test_another_package_version_replaces_the_build_and_keeps_unrelated_files(
 
     # what `pip install "fast-nvim-release==0.11.*"` then `setup` looks like
     (fake_bundle / "bin" / "helper").unlink()
-    make_bundle(fake_bundle, host, neovim="v0.11.7", version="0.11.1")
+    make_bundle(fake_bundle, host, neovim="v0.11.7", version="0.11.7.1")
     bundle.install(prefix)
     assert runtime_text(prefix) == "-- v0.11.7\n"
     assert not (prefix / "bin" / "helper").exists()

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Keep ``lines.json`` in step with Neovim's releases, and bump release counters.
+"""Keep ``lines.json`` in step with Neovim's releases, and bump the revision.
 
     python scripts/pins.py check [--strict]   # is every pin the newest patch?
     python scripts/pins.py update             # move pins to the newest patches
-    python scripts/pins.py bump --all         # after changing our installed code
-    python scripts/pins.py bump 0.12          # re-release one line
+    python scripts/pins.py bump               # after changing our installed code
 
 ``update`` asks GitHub for both repositories (``neovim/neovim`` for the
 official builds, ``neovim/neovim-releases`` for the glibc 2.17 ones), moves
 every pin to the newest patch of its line with the checksums GitHub
-publishes, adds new release lines, and bumps ``k`` of every line it changed.
+publishes, and adds new release lines.  A new patch is a new package version
+by itself (``0.12.7.<revision>``), so ``update`` leaves the revision alone.
+``bump`` raises the revision, which re-releases every line's current patch.
 Set ``GITHUB_TOKEN`` to lift the anonymous API rate limit.
 """
 
@@ -103,24 +104,25 @@ KINDS = {"official": list(PLATFORMS), "old_glibc": list(OLD_GLIBC_TAGS)}
 def plan(data: dict, upstream: Dict[str, Dict[str, dict]]) -> List[Tuple[str, str, str]]:
     """``(line, kind, newest tag)`` for every pin that is behind, plus new lines."""
     changes = []
+    specs = data["lines"]
     newest = {kind: newest_patches(upstream[kind]) for kind in KINDS}
-    supported = max(lines.line_key(line) for line in data)
-    for line in sorted(set(data) | set(newest["official"]), key=lines.line_key):
-        if line not in data and lines.line_key(line) < supported:
+    supported = max(lines.line_key(line) for line in specs)
+    for line in sorted(set(specs) | set(newest["official"]), key=lines.line_key):
+        if line not in specs and lines.line_key(line) < supported:
             continue  # an old line we never supported
         for kind in KINDS:
             tag = newest[kind].get(line)
-            pinned = (data.get(line, {}).get(kind) or {}).get("version")
+            pinned = (specs.get(line, {}).get(kind) or {}).get("version")
             if tag and tag != pinned:
                 changes.append((line, kind, tag))
     return changes
 
 
 def apply(data: dict, upstream: Dict[str, Dict[str, dict]], changes) -> List[str]:
-    """Edit ``data`` in place; return the lines whose ``k`` was bumped."""
+    """Edit ``data`` in place; return the lines whose pins moved."""
     touched = []
     for line, kind, tag in changes:
-        spec = data.setdefault(line, {"k": 0})
+        spec = data["lines"].setdefault(line, {})
         skip = (spec.get(kind) or {}).get("skip", {})
         wanted = [key for key in KINDS[kind] if key not in skip]
         sha = checksums(upstream[kind][tag], wanted)
@@ -129,22 +131,20 @@ def apply(data: dict, upstream: Dict[str, Dict[str, dict]], changes) -> List[str
         spec[kind] = {"version": tag, "sha256": sha, **({"skip": skip} if skip else {})}
         if line not in touched:
             touched.append(line)
-    for line in touched:
-        data[line]["k"] += 1
     return touched
 
 
 def ensure_license(line: str, data: dict) -> None:
     path = LICENSE_DIR / f"LICENSE.nvim-{line}.txt"
     if not path.is_file():
-        path.write_bytes(_get(LICENSE_URL.format(data[line]["official"]["version"])))
+        path.write_bytes(_get(LICENSE_URL.format(data["lines"][line]["official"]["version"])))
 
 
 def lagging(data: dict) -> List[str]:
     return [
         f"{line}: the old-glibc wheels carry {spec['old_glibc']['version']}, "
         f"the others {spec['official']['version']}"
-        for line, spec in data.items()
+        for line, spec in data["lines"].items()
         if spec.get("old_glibc") and spec["old_glibc"]["version"] != spec["official"]["version"]
     ]
 
@@ -152,7 +152,7 @@ def lagging(data: dict) -> List[str]:
 def cmd_check(args, data, upstream) -> int:
     changes = plan(data, upstream)
     for line, kind, tag in changes:
-        pinned = (data.get(line, {}).get(kind) or {}).get("version", "nothing")
+        pinned = (data["lines"].get(line, {}).get(kind) or {}).get("version", "nothing")
         print(f"behind: {line} {kind} pinned {pinned}, {lines.REPOS[kind]} has {tag}")
     for note in lagging(data):
         print(f"note: {note}")
@@ -163,9 +163,13 @@ def cmd_check(args, data, upstream) -> int:
 
 def cmd_update(args, data, upstream) -> int:
     touched = apply(data, upstream, plan(data, upstream))
+    printed: List[str] = []
     for line in touched:
         ensure_license(line, data)
-        print(f"{line} -> {line}.{data[line]['k']}")
+    for wheel in lines.wheels(data):
+        if wheel.line in touched and wheel.version not in printed:
+            printed.append(wheel.version)
+            print(f"{wheel.line} -> {wheel.version} ({wheel.build.kind} {wheel.build.version})")
     lines.save(data, args.file)
     if not touched:
         print("every pin is the newest patch")
@@ -173,13 +177,10 @@ def cmd_update(args, data, upstream) -> int:
 
 
 def cmd_bump(args, data, _upstream) -> int:
-    targets = list(data) if args.all else args.lines
-    unknown = [line for line in targets if line not in data]
-    if unknown or not targets:
-        raise SystemExit(f"unknown lines {unknown}; have {list(data)}" if unknown else "nothing")
-    for line in targets:
-        data[line]["k"] += 1
-        print(f"{line} -> {line}.{data[line]['k']}")
+    data["revision"] += 1
+    print(f"revision {data['revision']}; the next release publishes:")
+    for version in sorted({w.version for w in lines.wheels(data)}, key=lines.line_key):
+        print(f"  {version}")
     lines.save(data, args.file)
     return 0
 
@@ -190,10 +191,8 @@ def main(argv=None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("check", help="report pins that are behind")
     check.add_argument("--strict", action="store_true", help="exit 1 if any pin is behind")
-    commands.add_parser("update", help="move pins to the newest patches and bump k")
-    bump = commands.add_parser("bump", help="bump k (re-release lines)")
-    bump.add_argument("lines", nargs="*")
-    bump.add_argument("--all", action="store_true")
+    commands.add_parser("update", help="move pins to the newest patches")
+    commands.add_parser("bump", help="raise the revision (re-release every line)")
     args = parser.parse_args(argv)
 
     data = lines.load(args.file)

@@ -1,9 +1,10 @@
 name: release
 
 # Started by hand only (Actions > release > Run workflow). It publishes every
-# version in lines.json that the chosen index does not have yet, so a release
-# carries exactly the lines whose `k` was bumped. Publishing is irreversible
-# (an index never takes the same version twice); rehearse on TestPyPI first.
+# wheel in lines.json that the chosen index does not have yet: a new Neovim
+# patch, every line after a revision bump, or old-glibc wheels joining an
+# existing version. Publishing is irreversible (an index never takes the same
+# file twice); rehearse on TestPyPI first.
 
 on:
   workflow_dispatch:
@@ -28,7 +29,7 @@ env:
 
 jobs:
   build:
-    name: build the unpublished versions
+    name: build the unpublished wheels
     runs-on: ubuntu-latest
     outputs:
       built: ${{ steps.build.outputs.built }}
@@ -50,7 +51,7 @@ jobs:
         with:
           path: ${{ env.NVIM_CACHE }}
           key: nvim-release-${{ hashFiles('lines.json') }}
-      - name: build every version the index does not have
+      - name: build every wheel the index does not have
         id: build
         run: |
           python scripts/build_wheels.py --all --skip-published "$INDEX_URL"
@@ -62,7 +63,11 @@ jobs:
           python scripts/check_wheels.py
       - name: install the Linux x86_64 wheels in a clean venv and use them
         if: steps.build.outputs.built == 'true'
-        run: python scripts/smoke_test.py dist/*-manylinux_2_34_x86_64.whl dist/*-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        # either kind may be missing (only old-glibc wheels joining a version)
+        run: |
+          shopt -s nullglob
+          wheels=(dist/*-manylinux_2_34_x86_64.whl dist/*-manylinux_2_17_x86_64.manylinux2014_x86_64.whl)
+          if [ ${#wheels[@]} -gt 0 ]; then python scripts/smoke_test.py "${wheels[@]}"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.build.outputs.built == 'true'
         with:

@@ -32,7 +32,7 @@ esac
 """
 
 
-def make_bundle(root: Path, platform: Platform, neovim: str = "v0.12.6", version="0.12.1"):
+def make_bundle(root: Path, platform: Platform, neovim: str = "v0.12.6", version="0.12.6.1"):
     """A tree that looks like the ``_nvim`` directory of a built wheel."""
     exe = root / "bin" / platform.exe
     exe.parent.mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,7 @@ def make_bundle(root: Path, platform: Platform, neovim: str = "v0.12.6", version
     (runtime / "init.lua").write_text(f"-- {neovim}\n", encoding="utf-8")
     info = {
         "version": version,
-        "line": version.rsplit(".", 1)[0],
+        "line": ".".join(version.split(".")[:2]),
         "neovim": neovim,
         "platform": platform.key,
         "tag": platform.wheel_tag,
@@ -64,7 +64,7 @@ def host() -> Platform:
 
 @pytest.fixture()
 def fake_bundle(tmp_path, monkeypatch, host) -> Path:
-    """The installed package carries a fake Neovim v0.12.6 (package 0.12.1)."""
+    """The installed package carries a fake Neovim v0.12.6 (package 0.12.6.1)."""
     root = make_bundle(tmp_path / "_nvim", host)
     monkeypatch.setattr(bundle, "BUNDLE_ROOT", root)
     return root
