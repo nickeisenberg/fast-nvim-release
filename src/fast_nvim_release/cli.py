@@ -64,7 +64,7 @@ def cmd_path(args: argparse.Namespace) -> int:
         else bundle.default_prefix()
     )
     exe = prefix / "bin" / ("nvim.exe" if os.name == "nt" else "nvim")
-    if not bundle.installed(prefix) or not exe.is_file():
+    if bundle.installed(prefix) is None or not exe.is_file():
         raise FastNvimError(f"{PROG} has not installed Neovim in {prefix}")
     print(exe)
     return 0

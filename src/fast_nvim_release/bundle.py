@@ -18,9 +18,9 @@ import json
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Set, Union
+from typing import Iterable, Optional, Set, Tuple, Union
 
 from fast_nvim_release.platforms import PLATFORMS, Platform, host_platform
 
@@ -92,6 +92,16 @@ def bundled_exe() -> Path:
 # --------------------------------------------------------------------------
 # prefixes
 # --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class InstallJson:
+    """``install.json``: what this tool put into a prefix, and what it owns."""
+
+    line: Optional[str]
+    nvim_version: Optional[str]
+    platform: str
+    bin: Tuple[str, ...]
+
+
 def normalize(path: Union[str, os.PathLike]) -> Path:
     """Absolute, ``~``-expanded form of a user supplied path."""
     return Path(os.path.abspath(os.path.expanduser(os.fspath(path))))
@@ -107,13 +117,32 @@ def default_prefix() -> Path:
     return normalize(Path.home() / ".local")
 
 
-def installed(prefix: Path) -> Dict[str, object]:
-    """What this tool installed into ``prefix`` (``{}`` if nothing)."""
+def installed(prefix: Path) -> Optional[InstallJson]:
+    """What this tool installed into ``prefix``, or ``None`` if it manages nothing.
+
+    Only a marker this tool can read in full counts as an install: anything else
+    must not pass for one, or ``setup`` would treat a prefix it never managed as
+    its own and overwrite files there without ``--force``.
+    """
     try:
         data = json.loads((prefix / MARKER).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        return None
+    if not isinstance(data, dict):
+        return None
+    line, version = data.get("line"), data.get("nvim_version")
+    if not all(
+        value is None or isinstance(value, str) for value in (line, version)
+    ):
+        return None
+    platform, names = data.get("platform"), data.get("bin")
+    if not isinstance(platform, str):
+        return None
+    if not isinstance(names, list) or not all(
+        isinstance(name, str) for name in names
+    ):
+        return None
+    return InstallJson(line, version, platform, tuple(names))
 
 
 def _owned_bin_names(prefix: Path) -> Set[str]:
@@ -121,16 +150,11 @@ def _owned_bin_names(prefix: Path) -> Set[str]:
 
     The marker is a file users can edit, so only plain file names count.
     """
-    listed = installed(prefix).get("bin")
-    if not isinstance(listed, list):
-        return set()
+    info = installed(prefix)
     return {
         name
-        for name in listed
-        if isinstance(name, str)
-        and name not in ("", ".", "..")
-        and "/" not in name
-        and "\\" not in name
+        for name in (info.bin if info else ())
+        if name not in ("", ".", "..") and "/" not in name and "\\" not in name
     }
 
 
@@ -152,13 +176,15 @@ def _write_marker(prefix: Path, bin_names: Iterable[str]) -> None:
     marker = prefix / MARKER
     marker.parent.mkdir(parents=True, exist_ok=True)
     info = build_info()
-    data = {
-        "line": info.line if info else None,
-        "nvim_version": info.neovim if info else None,
-        "platform": bundled_platform().key,
-        "bin": sorted(bin_names),
-    }
-    marker.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    marker_info = InstallJson(
+        line=info.line if info else None,
+        nvim_version=info.neovim if info else None,
+        platform=bundled_platform().key,
+        bin=tuple(sorted(bin_names)),
+    )
+    marker.write_text(
+        json.dumps(asdict(marker_info), indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def install(prefix: Path, *, force: bool = False) -> Path:
@@ -173,7 +199,7 @@ def install(prefix: Path, *, force: bool = False) -> Path:
     prefix = normalize(prefix)
     names = sorted(entry.name for entry in (source / "bin").iterdir())
     owned = _owned_bin_names(prefix)
-    managed = bool(installed(prefix))
+    managed = installed(prefix) is not None
 
     if not force:
         # Windows file names ignore case, and releases differ in how they spell

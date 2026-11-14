@@ -35,7 +35,7 @@ def test_version_without_a_bundled_build(tmp_path, monkeypatch, capsys):
 def test_setup_installs_and_verifies(fake_bundle, prefix, capsys):
     assert main(["setup", "--prefix", str(prefix)]) == 0
     assert f"installed Neovim v0.12.6 into {prefix}" in capsys.readouterr().out
-    assert bundle.installed(prefix)["line"] == "0.12"
+    assert bundle.installed(prefix).line == "0.12"
 
 
 def test_setup_needs_a_prefix(fake_bundle, capsys):
