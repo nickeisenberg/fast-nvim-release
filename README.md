@@ -5,14 +5,8 @@ the official build for Linux (including RHEL 8-era systems), macOS or Windows,
 as a plain directory you put where you want. Made for CI, containers, fresh
 servers and machines without root, and just as handy on your own machine.
 
-```console
-$ uvx fast-nvim-release setup --prefix ~/.local
-installed Neovim v0.12.6 into /home/you/.local
-  /home/you/.local/bin/nvim
-```
-
-From nothing to a working `nvim`, with a fresh venv and a cold pip cache, takes
-3 to 4 seconds; `setup` itself about 0.15 of them:
+From nothing to a working `nvim`, in a fresh venv with a cold pip cache, takes
+3 to 4 seconds, of which `setup` itself is about 0.15:
 
 ```console
 $ time bash -c 'python3 -m venv get-nvim && get-nvim/bin/pip install -q fast-nvim-release && get-nvim/bin/fast-nvim-release setup --prefix ~/nvim && ~/nvim/bin/nvim --version | head -1'
