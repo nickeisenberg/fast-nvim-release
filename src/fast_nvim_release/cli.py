@@ -36,9 +36,9 @@ def _on_path(directory: Path) -> bool:
     )
 
 
-def cmd_setup(args: argparse.Namespace) -> int:
-    prefix = bundle.normalize(args.prefix)
-    exe = bundle.install(prefix, force=args.force)
+def cmd_setup(prefix: str, force: bool) -> int:
+    prefix = bundle.normalize(prefix)
+    exe = bundle.install(prefix, force=force)
     bundle.verify(exe, prefix)
     info = bundle.build_info()
     neovim = info.neovim if info else ""
@@ -57,12 +57,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_path(args: argparse.Namespace) -> int:
-    prefix = (
-        bundle.normalize(args.prefix)
-        if args.prefix
-        else bundle.default_prefix()
-    )
+def cmd_path(prefix: Optional[str]) -> int:
+    prefix = bundle.normalize(prefix) if prefix else bundle.default_prefix()
     exe = prefix / "bin" / ("nvim.exe" if os.name == "nt" else "nvim")
     if bundle.installed(prefix) is None or not exe.is_file():
         raise FastNvimError(f"{PROG} has not installed Neovim in {prefix}")
@@ -110,7 +106,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="overwrite files not installed here",
     )
-    setup.set_defaults(func=cmd_setup)
+    setup.set_defaults(
+        func=lambda parsed: cmd_setup(prefix=parsed.prefix, force=parsed.force)
+    )
 
     path = commands.add_parser(
         "path", help="print the nvim this tool installed in a prefix"
@@ -119,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--prefix",
         help=f"prefix to look in (default: {bundle.default_prefix()})",
     )
-    path.set_defaults(func=cmd_path)
+    path.set_defaults(func=lambda parsed: cmd_path(prefix=parsed.prefix))
 
     # `main` handles `run` itself so that nvim's own flags reach nvim; this
     # parser only puts the command into --help

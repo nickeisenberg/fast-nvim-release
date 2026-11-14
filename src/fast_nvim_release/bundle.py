@@ -128,20 +128,25 @@ def installed(prefix: Path) -> Optional[InstallJson]:
         data = json.loads((prefix / MARKER).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+
     if not isinstance(data, dict):
         return None
+
     line, version = data.get("line"), data.get("nvim_version")
     if not all(
         value is None or isinstance(value, str) for value in (line, version)
     ):
         return None
+
     platform, names = data.get("platform"), data.get("bin")
     if not isinstance(platform, str):
         return None
+
     if not isinstance(names, list) or not all(
         isinstance(name, str) for name in names
     ):
         return None
+
     return InstallJson(line, version, platform, tuple(names))
 
 
