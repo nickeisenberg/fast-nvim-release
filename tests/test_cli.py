@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from conftest import POSIX_ONLY
 
-from fast_nvim_release import __version__, bundle, cli
-from fast_nvim_release.cli import main
+from nvim_bin import __version__, bundle, cli
+from nvim_bin.cli import main
 
 
 def test_no_arguments_prints_help(capsys):
@@ -20,7 +20,7 @@ def test_version_names_the_bundled_neovim(fake_bundle, host, capsys):
     with pytest.raises(SystemExit):
         main(["--version"])
     out = capsys.readouterr().out
-    assert f"fast-nvim-release {__version__}" in out
+    assert f"nvim-bin {__version__}" in out
     assert "Neovim v0.12.6" in out and host.key in out
 
 

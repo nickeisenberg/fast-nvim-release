@@ -1,10 +1,10 @@
-"""Allow ``python -m fast_nvim_release``."""
+"""Allow ``python -m nvim_bin``."""
 
 from __future__ import annotations
 
 import sys
 
-from fast_nvim_release.cli import main
+from nvim_bin.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

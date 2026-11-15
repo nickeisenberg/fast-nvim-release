@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from fast_nvim_release import platforms
-from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS
+from nvim_bin import platforms
+from nvim_bin.platforms import OLD_GLIBC_TAGS, PLATFORMS
 
 
 def test_archive_layout():

@@ -30,7 +30,7 @@ from typing import Dict, List, Optional, Tuple
 import lines
 from lines import BuildKind, BuildPin, LineJson, LineSpec
 
-from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
+from nvim_bin.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
 
 API = "https://api.github.com/repos/{}/releases?per_page=100&page={}"
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
@@ -42,7 +42,7 @@ SHA256 = re.compile(r"\b([0-9a-f]{64})\b")
 # --------------------------------------------------------------------------
 def _get(url: str) -> bytes:
     request = urllib.request.Request(
-        url, headers={"User-Agent": "fast-nvim-release-pins"}
+        url, headers={"User-Agent": "nvim-bin-pins"}
     )
     token = os.environ.get("GITHUB_TOKEN")
     if token and url.startswith("https://api.github.com/"):

@@ -14,8 +14,8 @@ for path in (ROOT / "src", ROOT / "scripts"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from fast_nvim_release import bundle  # noqa: E402
-from fast_nvim_release.platforms import Platform, host_platform  # noqa: E402
+from nvim_bin import bundle  # noqa: E402
+from nvim_bin.platforms import Platform, host_platform  # noqa: E402
 
 #: the fake nvim is a shell script, so tests that start it are POSIX-only
 POSIX_ONLY = pytest.mark.skipif(

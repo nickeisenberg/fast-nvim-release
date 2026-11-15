@@ -31,7 +31,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NVIM_CACHE: ~/.cache/fast-nvim-release
+  NVIM_CACHE: ~/.cache/nvim-bin
   INDEX_URL: ${{ inputs.index == 'pypi' && 'https://pypi.org' || 'https://test.pypi.org' }}
 
 jobs:
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.index }}
-      url: ${{ inputs.index == 'pypi' && 'https://pypi.org/p/fast-nvim-release' || 'https://test.pypi.org/p/fast-nvim-release' }}
+      url: ${{ inputs.index == 'pypi' && 'https://pypi.org/p/nvim-bin' || 'https://test.pypi.org/p/nvim-bin' }}
     permissions:
       id-token: write
       contents: read

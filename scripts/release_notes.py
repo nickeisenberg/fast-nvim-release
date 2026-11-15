@@ -27,7 +27,7 @@ def entries(wheels: List[Path]) -> Dict[str, List[str]]:
     found = collections.defaultdict(list)
     for wheel in sorted(wheels):
         with zipfile.ZipFile(wheel) as zf:
-            info = json.loads(zf.read("fast_nvim_release/_nvim/build.json"))
+            info = json.loads(zf.read("nvim_bin/_nvim/build.json"))
         found[info["version"]].append(
             f"- `{info['tag']}`: Neovim {info['neovim']}"
         )
@@ -38,8 +38,8 @@ def body(version: str, items: List[str]) -> str:
     neovim = version.rsplit(".", 1)[0]
     line = neovim.rsplit(".", 1)[0]
     return (
-        f'Install: `pip install "fast-nvim-release=={neovim}.*"` (this Neovim), '
-        f'or `"fast-nvim-release=={line}.*"` to follow the {line} line.\n\n'
+        f'Install: `pip install "nvim-bin=={neovim}.*"` (this Neovim), '
+        f'or `"nvim-bin=={line}.*"` to follow the {line} line.\n\n'
         "Wheels:\n" + "\n".join(items) + "\n"
     )
 

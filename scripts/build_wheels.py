@@ -28,7 +28,7 @@ from typing import Dict, List, Set
 import lines
 from lines import Wheel
 
-from fast_nvim_release.platforms import host_wheel_tag
+from nvim_bin.platforms import host_wheel_tag
 
 NVIM = lines.NVIM_DIR.relative_to(lines.REPOROOT)
 IGNORE = shutil.ignore_patterns(
@@ -46,7 +46,7 @@ IGNORE = shutil.ignore_patterns(
 
 def published(index: str, version: str) -> Set[str]:
     """The wheel files of ``version`` already on ``index`` (a PyPI-like site)."""
-    url = f"{index.rstrip('/')}/pypi/fast-nvim-release/{version}/json"
+    url = f"{index.rstrip('/')}/pypi/nvim-bin/{version}/json"
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
             release = json.load(response)

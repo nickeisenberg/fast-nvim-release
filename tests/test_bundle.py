@@ -8,7 +8,7 @@ import os
 import pytest
 from conftest import POSIX_ONLY, make_bundle
 
-from fast_nvim_release import bundle
+from nvim_bin import bundle
 
 
 def runtime_text(prefix):
@@ -32,7 +32,7 @@ def test_build_info_and_exe(fake_bundle, host):
 def test_a_package_built_without_neovim_says_so(tmp_path, monkeypatch):
     monkeypatch.setattr(bundle, "BUNDLE_ROOT", tmp_path / "empty")
     assert bundle.build_info() is None
-    with pytest.raises(bundle.FastNvimError, match=r"fetch_nvim\.py"):
+    with pytest.raises(bundle.NvimBinError, match=r"fetch_nvim\.py"):
         bundle.bundled_exe()
 
 
@@ -77,7 +77,7 @@ def test_another_package_version_replaces_the_build_and_keeps_unrelated_files(
     bundle.install(prefix)  # owns bin/helper too
     (prefix / "bin" / "other-tool").write_text("mine", encoding="utf-8")
 
-    # what `pip install "fast-nvim-release==0.11.*"` then `setup` looks like
+    # what `pip install "nvim-bin==0.11.*"` then `setup` looks like
     (fake_bundle / "bin" / "helper").unlink()
     make_bundle(fake_bundle, host, neovim="v0.11.7", version="0.11.7.1")
     bundle.install(prefix)
@@ -112,7 +112,7 @@ def test_files_this_tool_did_not_install_are_never_overwritten(
         target.write_text("mine", encoding="utf-8")
     else:
         target.mkdir()
-    with pytest.raises(bundle.FastNvimError, match="--force") as excinfo:
+    with pytest.raises(bundle.NvimBinError, match="--force") as excinfo:
         bundle.install(prefix)
     assert str(target) in str(excinfo.value)
     assert bundle.installed(prefix) is None
@@ -127,7 +127,7 @@ def test_a_managed_prefix_still_protects_bin_entries_it_never_owned(
     mine = prefix / "bin" / "helper"
     mine.write_text("mine", encoding="utf-8")
     (fake_bundle / "bin" / "helper").write_text("new", encoding="utf-8")
-    with pytest.raises(bundle.FastNvimError):
+    with pytest.raises(bundle.NvimBinError):
         bundle.install(prefix)
     assert mine.read_text(encoding="utf-8") == "mine"
 
@@ -164,7 +164,7 @@ def test_a_marker_it_cannot_read_in_full_counts_as_not_installed(
         json.dumps({"line": "0.12", "bin": [host.exe]}), encoding="utf-8"
     )
     assert bundle.installed(tmp_path) is None
-    with pytest.raises(bundle.FastNvimError, match="--force"):
+    with pytest.raises(bundle.NvimBinError, match="--force"):
         bundle.install(tmp_path)
     assert (tmp_path / "bin" / host.exe).read_text(encoding="utf-8") == "mine"
 
@@ -222,7 +222,7 @@ def test_verify_notices_a_missing_runtime(fake_bundle, prefix):
     exe = bundle.install(prefix)
     bundle._remove(prefix / "share" / "nvim" / "runtime")
     with pytest.raises(
-        bundle.FastNvimError, match="did not start with the runtime"
+        bundle.NvimBinError, match="did not start with the runtime"
     ):
         bundle.verify(exe, prefix)
 

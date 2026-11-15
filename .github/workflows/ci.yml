@@ -19,7 +19,7 @@ concurrency:
 
 env:
   # archives are ~12 MB each and the pin changes rarely; see the cache steps
-  NVIM_CACHE: ~/.cache/fast-nvim-release
+  NVIM_CACHE: ~/.cache/nvim-bin
 
 jobs:
   lint:
