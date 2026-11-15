@@ -23,7 +23,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -35,6 +35,52 @@ from nvim_bin.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
 API = "https://api.github.com/repos/{}/releases?per_page=100&page={}"
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SHA256 = re.compile(r"\b([0-9a-f]{64})\b")
+
+
+# --------------------------------------------------------------------------
+# GitHub's releases, as far as the pins need them
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Asset:
+    name: str
+    sha256: Optional[str]  #: from GitHub's ``digest``, when it published one
+    url: str  #: ``browser_download_url``
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Asset:
+        algorithm, _, value = (data.get("digest") or "").partition(":")
+        return cls(
+            name=data["name"],
+            sha256=value if algorithm == "sha256" else None,
+            url=data["browser_download_url"],
+        )
+
+
+@dataclass(frozen=True)
+class Release:
+    tag: str
+    assets: Dict[str, Asset]  #: asset name -> asset
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Release:
+        assets = (Asset.from_dict(asset) for asset in data.get("assets", []))
+        return cls(
+            tag=data["tag_name"],
+            assets={asset.name: asset for asset in assets},
+        )
+
+
+@dataclass(frozen=True)
+class Change:
+    """A pin that is behind (or a new line): ``kind`` of ``line`` moves to ``tag``."""
+
+    line: str
+    kind: BuildKind
+    tag: str
+
+
+#: kind -> tag -> release
+Upstream = Dict[BuildKind, Dict[str, Release]]
 
 
 # --------------------------------------------------------------------------
@@ -52,16 +98,16 @@ def _get(url: str) -> bytes:
         return response.read()
 
 
-def fetch_releases(repo: str) -> Dict[str, dict]:
+def fetch_releases(repo: str) -> Dict[str, Release]:
     """tag -> release, for the stable releases of ``repo``."""
-    found: Dict[str, dict] = {}
+    found: Dict[str, Release] = {}
     for page in range(1, 6):
         batch = json.loads(_get(API.format(repo, page)))
         for release in batch:
             if not (release["draft"] or release["prerelease"]) and TAG.match(
                 release["tag_name"]
             ):
-                found[release["tag_name"]] = release
+                found[release["tag_name"]] = Release.from_dict(release)
         if len(batch) < 100:
             break
     return found
@@ -83,34 +129,28 @@ def newest_patches(tags) -> Dict[str, str]:
 
 
 def checksums(
-    release: dict, platform_keys: List[PlatformKey]
+    release: Release, platform_keys: List[PlatformKey]
 ) -> Dict[PlatformKey, str]:
     """platform -> sha256 of its archive in ``release``, from GitHub's digests."""
-    assets = {asset["name"]: asset for asset in release.get("assets", [])}
     found: Dict[PlatformKey, str] = {}
     for key in platform_keys:
-        asset = assets.get(PLATFORMS[key].asset)
+        asset = release.assets.get(PLATFORMS[key].asset)
         if asset is None:
             # the pin still moves; the diff in the pins PR shows the dropped platform
             print(
-                f"warning: {release['tag_name']} has no {PLATFORMS[key].asset}; "
+                f"warning: {release.tag} has no {PLATFORMS[key].asset}; "
                 f"{key} gets no wheel for it",
                 file=sys.stderr,
             )
             continue
-        digest = asset.get("digest") or ""
-        if digest.startswith("sha256:"):
-            found[key] = digest.split(":", 1)[1]
+        if asset.sha256:
+            found[key] = asset.sha256
             continue
-        sumfile = assets.get(PLATFORMS[key].asset + ".sha256sum")
-        match = (
-            SHA256.search(_get(sumfile["browser_download_url"]).decode())
-            if sumfile
-            else None
-        )
+        sumfile = release.assets.get(asset.name + ".sha256sum")
+        match = SHA256.search(_get(sumfile.url).decode()) if sumfile else None
         if match is None:
             raise SystemExit(
-                f"{release['tag_name']}: no published checksum for {asset['name']}"
+                f"{release.tag}: no published checksum for {asset.name}"
             )
         found[key] = match.group(1)
     return found
@@ -125,11 +165,9 @@ KIND_KEYS: Dict[BuildKind, List[PlatformKey]] = {
 }
 
 
-def plan(
-    data: LineJson, upstream: Dict[str, Dict[str, dict]]
-) -> List[Tuple[str, BuildKind, str]]:
-    """``(line, kind, newest tag)`` for every pin that is behind, plus new lines."""
-    changes = []
+def plan(data: LineJson, upstream: Upstream) -> List[Change]:
+    """A change for every pin that is behind, plus one for each new line."""
+    changes: List[Change] = []
     specs = data.lines
     newest = {kind: newest_patches(upstream[kind]) for kind in KIND_KEYS}
     supported = max(lines.line_key(line) for line in specs)
@@ -142,35 +180,33 @@ def plan(
             tag = newest[kind].get(line)
             pin = specs[line].pin(kind) if line in specs else None
             if tag and (pin is None or tag != pin.version):
-                changes.append((line, kind, tag))
+                changes.append(Change(line=line, kind=kind, tag=tag))
     return changes
 
 
 def apply(
-    data: LineJson,
-    upstream: Dict[str, Dict[str, dict]],
-    changes: List[Tuple[str, BuildKind, str]],
+    data: LineJson, upstream: Upstream, changes: List[Change]
 ) -> Tuple[LineJson, List[str]]:
     """The edited data, and the lines whose pins moved."""
     specs = dict(data.lines)
-    touched = []
-    for line, kind, tag in changes:
-        spec = specs.get(line)
-        if spec is None and kind != "official":
+    touched: List[str] = []
+    for change in changes:
+        spec = specs.get(change.line)
+        if spec is None and change.kind != "official":
             continue  # a line is defined by its official build
-        pin = spec.pin(kind) if spec else None
+        pin = spec.pin(change.kind) if spec else None
         skip = pin.skip if pin else {}
-        wanted = [key for key in KIND_KEYS[kind] if key not in skip]
-        sha = checksums(upstream[kind][tag], wanted)
+        wanted = [key for key in KIND_KEYS[change.kind] if key not in skip]
+        sha = checksums(upstream[change.kind][change.tag], wanted)
         if not sha:
             continue
-        new_pin = BuildPin(version=tag, sha256=sha, skip=skip)
+        new_pin = BuildPin(version=change.tag, sha256=sha, skip=skip)
         if spec is None:
-            specs[line] = LineSpec(official=new_pin)
+            specs[change.line] = LineSpec(official=new_pin)
         else:
-            specs[line] = replace(spec, **{kind: new_pin})
-        if line not in touched:
-            touched.append(line)
+            specs[change.line] = replace(spec, **{change.kind: new_pin})
+        if change.line not in touched:
+            touched.append(change.line)
     return replace(data, lines=specs), touched
 
 
@@ -191,12 +227,13 @@ def lagging(data: LineJson) -> List[str]:
 
 def cmd_check(args, data, upstream) -> int:
     changes = plan(data, upstream)
-    for line, kind, tag in changes:
-        spec = data.lines.get(line)
-        pin = spec.pin(kind) if spec else None
+    for change in changes:
+        spec = data.lines.get(change.line)
+        pin = spec.pin(change.kind) if spec else None
         pinned = pin.version if pin else "nothing"
         print(
-            f"behind: {line} {kind} pinned {pinned}, {lines.REPOS[kind]} has {tag}"
+            f"behind: {change.line} {change.kind} pinned {pinned}, "
+            f"{lines.REPOS[change.kind]} has {change.tag}"
         )
     for note in lagging(data):
         print(f"note: {note}")
@@ -250,7 +287,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     data = lines.load_line_json(args.file)
-    upstream: Optional[Dict[str, Dict[str, dict]]] = None
+    upstream: Optional[Upstream] = None
     if args.command != "bump":
         try:
             upstream = {

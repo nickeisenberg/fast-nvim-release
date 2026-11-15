@@ -402,19 +402,16 @@ def test_select_adds_missing_files_to_an_existing_version(monkeypatch):
 # pins: following Neovim's releases
 # --------------------------------------------------------------------------
 def _release(tag, platform_keys, digests=True):
-    assets = []
+    assets = {}
     for key in platform_keys:
         name = PLATFORMS[key].asset
         digest = hashlib.sha256(f"{tag}{name}".encode()).hexdigest()
-        assets.append(
-            {"name": name, "digest": f"sha256:{digest}" if digests else None}
+        assets[name] = pins.Asset(
+            name=name,
+            sha256=digest if digests else None,
+            url=f"https://example.invalid/{tag}/{name}",
         )
-    return {
-        "tag_name": tag,
-        "draft": False,
-        "prerelease": False,
-        "assets": assets,
-    }
+    return pins.Release(tag=tag, assets=assets)
 
 
 def _upstream(official, old):
@@ -422,6 +419,31 @@ def _upstream(official, old):
         "official": {t: _release(t, list(PLATFORMS)) for t in official},
         "old_glibc": {t: _release(t, ["linux-x86_64"]) for t in old},
     }
+
+
+def test_a_release_is_read_from_githubs_json():
+    release = pins.Release.from_dict(
+        {
+            "tag_name": "v0.12.6",
+            "draft": False,
+            "assets": [
+                {
+                    "name": "a.tar.gz",
+                    "digest": "sha256:" + "ab" * 32,
+                    "browser_download_url": "https://example.invalid/a",
+                },
+                {
+                    "name": "b.zip",
+                    "digest": None,
+                    "browser_download_url": "https://example.invalid/b",
+                },
+            ],
+        }
+    )
+    assert release.tag == "v0.12.6"
+    assert release.assets["a.tar.gz"].sha256 == "ab" * 32
+    assert release.assets["b.zip"].sha256 is None
+    assert release.assets["b.zip"].url == "https://example.invalid/b"
 
 
 def test_newest_patch_per_line():
@@ -452,7 +474,7 @@ def test_update_moves_only_the_lines_that_changed():
         [*old.values()],
     )
     changes = pins.plan(data, upstream)
-    assert changes == [("0.12", "official", "v0.12.99")]
+    assert changes == [pins.Change("0.12", "official", "v0.12.99")]
     revision = data.revision
     others = {line: spec for line, spec in specs.items() if line != "0.12"}
     updated, touched = pins.apply(data, upstream, changes)
@@ -472,7 +494,9 @@ def test_update_moves_only_the_lines_that_changed():
 def test_update_keeps_deliberately_skipped_builds_out():
     data = lines.load_line_json()
     upstream = _upstream(["v0.10.99"], [])
-    data, _ = pins.apply(data, upstream, [("0.10", "official", "v0.10.99")])
+    data, _ = pins.apply(
+        data, upstream, [pins.Change("0.10", "official", "v0.10.99")]
+    )
     assert "linux-arm64" not in data.lines["0.10"].official.sha256
     assert "linux-arm64" in data.lines["0.10"].official.skip
 
@@ -480,8 +504,8 @@ def test_update_keeps_deliberately_skipped_builds_out():
 def test_update_adds_a_new_release_line():
     data = lines.load_line_json()
     upstream = _upstream(["v0.99.0"], [])
-    changes = [c for c in pins.plan(data, upstream) if c[0] == "0.99"]
-    assert changes == [("0.99", "official", "v0.99.0")]
+    changes = [c for c in pins.plan(data, upstream) if c.line == "0.99"]
+    assert changes == [pins.Change("0.99", "official", "v0.99.0")]
     data, _ = pins.apply(data, upstream, changes)
     assert (
         lines.find("0.99", LINUX.wheel_tag, data).version
@@ -491,22 +515,26 @@ def test_update_adds_a_new_release_line():
 
 def test_a_release_without_published_checksums_stops_the_update(monkeypatch):
     data = lines.load_line_json()
-    upstream = {
+    upstream: pins.Upstream = {
         "official": {
             "v0.12.99": _release("v0.12.99", list(PLATFORMS), digests=False)
         }
     }
     with pytest.raises(SystemExit, match="no published checksum"):
-        pins.apply(data, upstream, [("0.12", "official", "v0.12.99")])
+        pins.apply(
+            data, upstream, [pins.Change("0.12", "official", "v0.12.99")]
+        )
 
 
 def test_a_platform_missing_from_a_release_is_a_warning(capsys):
     data = lines.load_line_json()
     without_windows_arm = [key for key in PLATFORMS if key != "windows-arm64"]
-    upstream = {
+    upstream: pins.Upstream = {
         "official": {"v0.12.99": _release("v0.12.99", without_windows_arm)}
     }
-    data, _ = pins.apply(data, upstream, [("0.12", "official", "v0.12.99")])
+    data, _ = pins.apply(
+        data, upstream, [pins.Change("0.12", "official", "v0.12.99")]
+    )
     assert "windows-arm64" not in data.lines["0.12"].official.sha256
     assert (
         "warning: v0.12.99 has no nvim-win-arm64.zip"
