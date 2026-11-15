@@ -38,27 +38,29 @@ def test_lines_json_is_well_formed():
     data = lines.load_line_json()
     assert isinstance(data.revision, int) and data.revision >= 1
     specs = data.lines
-    assert list(specs) == sorted(specs, key=lines.line_key)
+    assert list(specs) == sorted(specs, key=lines.version_tuple)
     for line, spec in specs.items():
         assert re.fullmatch(r"\d+\.\d+", line)
-        for build in lines.builds(spec):
-            assert re.fullmatch(rf"v{re.escape(line)}\.\d+", build.version)
-            for key, digest in build.sha256.items():
-                assert key in PLATFORMS and re.fullmatch(
+        for kind in lines.KINDS:
+            pin = spec.pin(kind)
+            if pin is None:
+                continue
+            assert re.fullmatch(rf"v{re.escape(line)}\.\d+", pin.version)
+            assert lines.line_of(pin.version) == line
+            for key, digest in pin.sha256.items():
+                assert key in lines.KIND_PLATFORMS[kind] and re.fullmatch(
                     r"[0-9a-f]{64}", digest
                 )
-            if build.kind == "old_glibc":
-                assert set(build.sha256) <= set(OLD_GLIBC_TAGS)
 
 
 def test_every_wheel_has_its_line_version_and_tag():
     data = lines.load_line_json()
     for wheel in lines.wheels(data):
-        assert wheel.version == f"{wheel.build.version[1:]}.{data.revision}"
+        assert wheel.version == f"{wheel.neovim[1:]}.{data.revision}"
         assert wheel.version.startswith(wheel.line + ".")
         expected = (
             wheel.platform.wheel_tag
-            if wheel.build.kind == "official"
+            if wheel.kind == "official"
             else OLD_GLIBC_TAGS[wheel.platform.key]
         )
         assert wheel.tag == expected
@@ -80,9 +82,20 @@ def test_known_gaps_have_no_wheel():
 
 def test_the_two_repositories_never_share_a_cache_entry():
     """Both publish v0.11.7/nvim-linux-x86_64.tar.gz; the files differ."""
-    official, old = lines.builds(lines.load_line_json().lines["0.11"])
-    assert official.url(LINUX.key) != old.url(LINUX.key)
-    assert official.sha256[LINUX.key][:16] != old.sha256[LINUX.key][:16]
+    official = lines.find("0.11", LINUX.wheel_tag)
+    old = lines.find("0.11", OLD_GLIBC_TAGS[LINUX.key])
+    assert official.url != old.url
+    assert official.sha256[:16] != old.sha256[:16]
+
+
+def test_version_helpers():
+    assert lines.version_tuple("0.12") > lines.version_tuple("0.9")
+    assert lines.version_tuple("0.12.6.1") == (0, 12, 6, 1)
+    assert lines.parse_tag("v0.12.10") == (0, 12, 10)
+    assert lines.parse_tag("nightly") is None
+    assert lines.line_of("v0.12.6") == "0.12"
+    with pytest.raises(ValueError):
+        lines.line_of("stable")
 
 
 # --------------------------------------------------------------------------
@@ -154,7 +167,7 @@ def test_an_archive_that_does_not_match_its_pin_is_refused(
 
     monkeypatch.setattr(fetch_nvim, "download", evil)
     with pytest.raises(SystemExit, match="checksum mismatch"):
-        fetch_nvim.archive(lines.find("0.12", LINUX.wheel_tag).build, LINUX)
+        fetch_nvim.archive(lines.find("0.12", LINUX.wheel_tag))
     assert not list(tmp_path.rglob("*.tar.gz"))
 
 
@@ -162,14 +175,17 @@ def test_a_verified_cached_archive_is_reused(tmp_path, monkeypatch):
     monkeypatch.setenv("NVIM_BIN_CACHE_DIR", str(tmp_path))
     data = b"archive"
     digest = hashlib.sha256(data).hexdigest()
-    build = lines.Build("official", "v0.12.6", {LINUX.key: digest})
+    wheel = replace(
+        lines.find("0.12", LINUX.wheel_tag),
+        pin=lines.BuildPin(version="v0.12.6", sha256={LINUX.key: digest}),
+    )
     cached = tmp_path / digest[:16] / LINUX.asset
     cached.parent.mkdir()
     cached.write_bytes(data)
     monkeypatch.setattr(
         fetch_nvim, "download", lambda url, dest: pytest.fail("downloaded")
     )
-    assert fetch_nvim.archive(build, LINUX) == cached
+    assert fetch_nvim.archive(wheel) == cached
 
 
 @NEEDS_TAR_FILTERS
@@ -180,7 +196,7 @@ def test_fetch_writes_build_json_and_replaces_a_previous_build(
     (dest / "0.12" / "linux-x86_64").mkdir(parents=True)  # leftovers
     (dest / "LICENSE.nvim-0.12.txt").write_text("Apache", encoding="utf-8")
     archive = _tar(tmp_path / "a.tar.gz", NVIM_TREE)
-    monkeypatch.setattr(fetch_nvim, "archive", lambda build, platform: archive)
+    monkeypatch.setattr(fetch_nvim, "archive", lambda wheel: archive)
     monkeypatch.setattr(fetch_nvim, "runs_here", lambda wheel: False)
     wheel = lines.find("0.12", OLD_X86)
     fetch_nvim.fetch(wheel, dest)
@@ -188,7 +204,7 @@ def test_fetch_writes_build_json_and_replaces_a_previous_build(
     assert info == {
         "version": wheel.version,
         "line": "0.12",
-        "neovim": wheel.build.version,
+        "neovim": wheel.neovim,
         "platform": "linux-x86_64",
         "tag": OLD_X86,
     }
@@ -255,7 +271,7 @@ def fake_wheel(
     info = {
         "version": wheel.version,
         "line": wheel.line,
-        "neovim": wheel.build.version,
+        "neovim": wheel.neovim,
         "platform": wheel.platform.key,
         "tag": wheel.tag,
         **(info_override or {}),

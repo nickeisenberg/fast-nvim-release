@@ -31,10 +31,9 @@ from typing import Dict, List, Optional, Tuple
 import lines
 from lines import BuildKind, BuildPin, LineJson, LineSpec
 
-from nvim_bin.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
+from nvim_bin.platforms import PLATFORMS, PlatformKey
 
 API = "https://api.github.com/repos/{}/releases?per_page=100&page={}"
-TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SHA256 = re.compile(r"\b([0-9a-f]{64})\b")
 
 
@@ -108,7 +107,7 @@ def fetch_releases(repo: str) -> Dict[str, Release]:
         batch = json.loads(_get(API.format(repo, page)))
         for raw in batch:
             release = Release.from_dict(raw)
-            if release.stable and TAG.match(release.tag):
+            if release.stable and lines.parse_tag(release.tag):
                 found[release.tag] = release
         if len(batch) < 100:
             break
@@ -117,14 +116,14 @@ def fetch_releases(repo: str) -> Dict[str, Release]:
 
 def newest_patches(tags: list[str]) -> Dict[str, str]:
     """line -> newest tag, e.g. ``{"0.12": "v0.12.7"}``."""
-    newest: Dict[str, Tuple[int, int, int]] = {}
+    newest: Dict[str, Tuple[int, int, int]] = {}  # line -> newest version
     for tag in tags:
-        match = TAG.match(tag)
-        if match:
-            major, minor, patch = (int(part) for part in match.groups())
-            version = (major, minor, patch)
-            line = f"{version[0]}.{version[1]}"
-            newest[line] = max(newest.get(line, version), version)
+        version = lines.parse_tag(tag)
+        if version is None:
+            continue  # nightly, stable, ...
+        line = lines.line_of(tag)
+        if line not in newest or version > newest[line]:
+            newest[line] = version
     return {
         line: "v{}.{}.{}".format(*version) for line, version in newest.items()
     }
@@ -161,31 +160,29 @@ def checksums(
 # --------------------------------------------------------------------------
 # the commands
 # --------------------------------------------------------------------------
-KIND_KEYS: Dict[BuildKind, List[PlatformKey]] = {
-    "official": list(PLATFORMS),
-    "old_glibc": list(OLD_GLIBC_TAGS),
-}
-
-
-def plan(data: LineJson, upstream: Upstream) -> List[Change]:
+def plan(line_json: LineJson, upstream: Upstream) -> List[Change]:
     """A change for every pin that is behind, plus one for each new line."""
-    changes: List[Change] = []
-    specs = data.lines
+    specs = line_json.lines
+    supported = max(lines.version_tuple(line) for line in specs)
+
     newest: Dict[BuildKind, Dict[str, str]] = {}
-    for kind in KIND_KEYS:
-        tags = [release.tag for release in upstream[kind].values()]
-        newest[kind] = newest_patches(tags)
-    supported = max(lines.line_key(line) for line in specs)
+    for glibc_kind in lines.KINDS:
+        tags = [release.tag for release in upstream[glibc_kind].values()]
+        newest[glibc_kind] = newest_patches(tags)
+
+    changes: List[Change] = []
     for line in sorted(
-        set(specs) | set(newest["official"]), key=lines.line_key
+        set(specs) | set(newest["official"]), key=lines.version_tuple
     ):
-        if line not in specs and lines.line_key(line) < supported:
+        if line not in specs and lines.version_tuple(line) < supported:
             continue  # an old line we never supported
-        for kind in KIND_KEYS:
-            tag = newest[kind].get(line)
-            pin = specs[line].pin(kind) if line in specs else None
+
+        for glibc_kind in lines.KINDS:
+            tag = newest[glibc_kind].get(line)
+            pin = specs[line].pin(glibc_kind) if line in specs else None
             if tag and (pin is None or tag != pin.version):
-                changes.append(Change(line=line, kind=kind, tag=tag))
+                changes.append(Change(line=line, kind=glibc_kind, tag=tag))
+
     return changes
 
 
@@ -201,7 +198,9 @@ def apply(
             continue  # a line is defined by its official build
         pin = spec.pin(change.kind) if spec else None
         skip = pin.skip if pin else {}
-        wanted = [key for key in KIND_KEYS[change.kind] if key not in skip]
+        wanted = [
+            key for key in lines.KIND_PLATFORMS[change.kind] if key not in skip
+        ]
         sha = checksums(upstream[change.kind][change.tag], wanted)
         if not sha:
             continue
@@ -237,7 +236,7 @@ def cmd_update(args, data, upstream) -> int:
         if wheel.line in touched and wheel.version not in printed:
             printed.append(wheel.version)
             print(
-                f"{wheel.line} -> {wheel.version} ({wheel.build.kind} {wheel.build.version})"
+                f"{wheel.line} -> {wheel.version} ({wheel.kind} {wheel.neovim})"
             )
     for note in lagging(data):
         print(f"note: {note}")
@@ -257,7 +256,7 @@ def cmd_bump(args, data, _upstream) -> int:
     data = replace(data, revision=data.revision + 1)
     print(f"revision {data.revision}; the next release publishes:")
     for version in sorted(
-        {w.version for w in lines.wheels(data)}, key=lines.line_key
+        {w.version for w in lines.wheels(data)}, key=lines.version_tuple
     ):
         print(f"  {version}")
     lines.save_line_json(data, args.file)

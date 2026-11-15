@@ -28,7 +28,7 @@ import zipfile
 from pathlib import Path
 
 import lines
-from lines import Build, Wheel
+from lines import Wheel
 
 from nvim_bin.bundle import PARTS, BuildJson
 from nvim_bin.platforms import Platform, host_platform, host_wheel_tag
@@ -69,19 +69,19 @@ def download(url: str, dest: Path) -> None:
     os.replace(partial, dest)
 
 
-def archive(build: Build, platform: Platform) -> Path:
-    """A cached, checksum-verified release archive."""
-    expected = build.sha256[platform.key]
+def archive(wheel: Wheel) -> Path:
+    """The wheel's Neovim release archive, cached and checksum-verified."""
+    expected = wheel.sha256
     # keyed by checksum: both Neovim repositories publish e.g. v0.11.7/nvim-linux-x86_64.tar.gz
-    path = cache_dir() / expected[:16] / platform.asset
+    path = cache_dir() / expected[:16] / wheel.platform.asset
     if not path.is_file() or sha256(path) != expected:
-        print(f"  downloading {build.url(platform.key)}", flush=True)
-        download(build.url(platform.key), path)
+        print(f"  downloading {wheel.url}", flush=True)
+        download(wheel.url, path)
         actual = sha256(path)
         if actual != expected:
             path.unlink()
             raise SystemExit(
-                f"checksum mismatch for {build.version} {platform.asset}:\n"
+                f"checksum mismatch for {wheel.neovim} {wheel.platform.asset}:\n"
                 f"  pinned {expected}\n  got    {actual}"
             )
     return path
@@ -141,14 +141,14 @@ def runs_here(wheel: Wheel) -> bool:
     here = host_platform()
     if here is None or here.key != wheel.platform.key:
         return False
-    return wheel.build.kind == "old_glibc" or wheel.tag == host_wheel_tag()
+    return wheel.kind == "old_glibc" or wheel.tag == host_wheel_tag()
 
 
 def fetch(wheel: Wheel, dest: Path = DEST) -> None:
     print(
-        f"{wheel.version}: Neovim {wheel.build.version} ({wheel.build.repo}) for {wheel.tag}"
+        f"{wheel.version}: Neovim {wheel.neovim} ({wheel.repo}) for {wheel.tag}"
     )
-    source = archive(wheel.build, wheel.platform)
+    source = archive(wheel)
     dest.mkdir(parents=True, exist_ok=True)
     clear(dest)
     unpack(source, wheel.platform, dest)
@@ -156,7 +156,7 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
     info = BuildJson(
         version=wheel.version,
         line=wheel.line,
-        neovim=wheel.build.version,
+        neovim=wheel.neovim,
         platform=wheel.platform.key,
         tag=wheel.tag,
     )
@@ -165,7 +165,7 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
     )
 
     if runs_here(wheel):
-        check_runs(dest / "bin" / wheel.platform.exe, wheel.build.version)
+        check_runs(dest / "bin" / wheel.platform.exe, wheel.neovim)
 
     license_file = dest / lines.license_name(wheel.line)
     if not license_file.is_file():

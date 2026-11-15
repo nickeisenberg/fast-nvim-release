@@ -23,6 +23,7 @@ on the index as they are.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,11 +44,18 @@ LINES_FILE = REPOROOT / "lines.json"
 #: where fetch_nvim.py unpacks a build, and where the tracked licenses live
 NVIM_DIR = REPOROOT / "src" / "nvim_bin" / "_nvim"
 BuildKind = Literal["official", "old_glibc"]
-KINDS: Tuple[BuildKind, ...] = ("official", "old_glibc")
+#: kind -> the platforms that kind of build can exist for
+KIND_PLATFORMS: Dict[BuildKind, List[PlatformKey]] = {
+    "official": list(PLATFORMS),
+    "old_glibc": list(OLD_GLIBC_TAGS),
+}
+KINDS: Tuple[BuildKind, ...] = tuple(KIND_PLATFORMS)
 REPOS: Dict[BuildKind, str] = {
     "official": "neovim/neovim",
     "old_glibc": "neovim/neovim-releases",
 }
+#: a Neovim release tag, e.g. ``v0.12.6`` (not ``nightly`` or ``stable``)
+TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
 @dataclass(frozen=True)
@@ -119,7 +127,7 @@ class LineJson:
             "revision": self.revision,
             "lines": {
                 line: self.lines[line].to_dict()
-                for line in sorted(self.lines, key=line_key)
+                for line in sorted(self.lines, key=version_tuple)
             },
         }
 
@@ -133,31 +141,6 @@ class LineJson:
             },
         )
 
-    def save(self, path: Path = LINES_FILE) -> None:
-        path.write_text(
-            json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8"
-        )
-
-    @classmethod
-    def load(cls, path: Path = LINES_FILE) -> LineJson:
-        with path.open(encoding="utf-8") as handle:
-            return cls.from_dict(json.load(handle))
-
-
-@dataclass(frozen=True)
-class Build:
-    kind: BuildKind
-    version: str  #: the Neovim release, e.g. ``v0.12.6``
-    sha256: Dict[PlatformKey, str]  #: platform key -> archive checksum
-
-    @property
-    def repo(self) -> str:
-        return REPOS[self.kind]
-
-    def url(self, platform_key: PlatformKey) -> str:
-        asset = PLATFORMS[platform_key].asset
-        return f"https://github.com/{self.repo}/releases/download/{self.version}/{asset}"
-
 
 @dataclass(frozen=True)
 class Wheel:
@@ -165,7 +148,30 @@ class Wheel:
     version: str  #: the package version, e.g. ``0.12.6.1``
     tag: WheelTag  #: the wheel's platform tag
     platform: Platform
-    build: Build
+    kind: BuildKind  #: which repository the build comes from
+    pin: BuildPin  #: the build, as ``lines.json`` pins it
+
+    @property
+    def neovim(self) -> str:
+        """The Neovim release this wheel carries, e.g. ``v0.12.6``."""
+        return self.pin.version
+
+    @property
+    def repo(self) -> str:
+        return REPOS[self.kind]
+
+    @property
+    def sha256(self) -> str:
+        """The pinned checksum of this wheel's Neovim archive."""
+        return self.pin.sha256[self.platform.key]
+
+    @property
+    def url(self) -> str:
+        """Where this wheel's Neovim archive is downloaded from."""
+        return (
+            f"https://github.com/{self.repo}/releases/download/"
+            f"{self.neovim}/{self.platform.asset}"
+        )
 
     @property
     def label(self) -> str:
@@ -176,17 +182,53 @@ class Wheel:
         return f"nvim_bin-{self.version}-py3-none-{self.tag}.whl"
 
 
-def line_key(line: str) -> Tuple[int, ...]:
-    return tuple(int(part) for part in line.split("."))
+# --------------------------------------------------------------------------
+# versions
+# --------------------------------------------------------------------------
+def version_tuple(version: str) -> Tuple[int, ...]:
+    """``"0.12"`` -> ``(0, 12)``, ``"0.12.6.1"`` -> ``(0, 12, 6, 1)``.
+
+    Versions compare correctly as numbers, not as text (``0.12`` > ``0.9``).
+    """
+    return tuple(int(part) for part in version.split("."))
 
 
+def parse_tag(tag: str) -> Optional[Tuple[int, int, int]]:
+    """``"v0.12.6"`` -> ``(0, 12, 6)``; ``None`` for ``nightly`` and the like."""
+    match = TAG.match(tag)
+    if match is None:
+        return None
+    major, minor, patch = (int(part) for part in match.groups())
+    return (major, minor, patch)
+
+
+def line_of(tag: str) -> str:
+    """``"v0.12.6"`` -> ``"0.12"``, the line a release belongs to."""
+    version = parse_tag(tag)
+    if version is None:
+        raise ValueError(f"not a Neovim release tag: {tag!r}")
+    major, minor, _ = version
+    return f"{major}.{minor}"
+
+
+def package_version(pin: BuildPin, revision: int) -> str:
+    """``v0.12.6`` with revision 1 -> ``0.12.6.1``."""
+    return f"{pin.version.lstrip('v')}.{revision}"
+
+
+# --------------------------------------------------------------------------
+# lines.json and the wheels it describes
+# --------------------------------------------------------------------------
 def load_line_json(path: Path = LINES_FILE) -> LineJson:
     """``lines.json`` as a :class:`LineJson`, lines oldest first."""
-    return LineJson.load(path)
+    with path.open(encoding="utf-8") as handle:
+        return LineJson.from_dict(json.load(handle))
 
 
 def save_line_json(line_json: LineJson, path: Path = LINES_FILE) -> None:
-    line_json.save(path)
+    path.write_text(
+        json.dumps(line_json.to_dict(), indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def license_name(line: str) -> str:
@@ -204,20 +246,11 @@ def newest_line(line_json: Optional[LineJson] = None) -> str:
     return list((line_json or load_line_json()).lines)[-1]
 
 
-def builds(spec: LineSpec) -> List[Build]:
-    found = []
-    for kind in KINDS:
-        build_spec = spec.pin(kind)
-        if build_spec is not None:
-            found.append(
-                Build(kind, build_spec.version, dict(build_spec.sha256))
-            )
-    return found
-
-
-def package_version(build: Build, revision: int) -> str:
-    """``v0.12.6`` with revision 1 -> ``0.12.6.1``."""
-    return f"{build.version.lstrip('v')}.{revision}"
+def wheel_tag(kind: BuildKind, platform: Platform) -> WheelTag:
+    """The platform tag of a ``kind`` build's wheel for ``platform``."""
+    if kind == "official":
+        return platform.wheel_tag
+    return OLD_GLIBC_TAGS[platform.key]
 
 
 def wheels(line_json: Optional[LineJson] = None) -> List[Wheel]:
@@ -225,17 +258,17 @@ def wheels(line_json: Optional[LineJson] = None) -> List[Wheel]:
     line_json = line_json or load_line_json()
     found = []
     for line, spec in line_json.lines.items():
-        for build in builds(spec):
-            version = package_version(build, line_json.revision)
+        for kind in KINDS:
+            pin = spec.pin(kind)
+            if pin is None:
+                continue
+            version = package_version(pin, line_json.revision)
             for key, platform in PLATFORMS.items():
-                if key not in build.sha256:
-                    continue
-                tag = (
-                    platform.wheel_tag
-                    if build.kind == "official"
-                    else OLD_GLIBC_TAGS[key]
-                )
-                found.append(Wheel(line, version, tag, platform, build))
+                if key in pin.sha256:
+                    tag = wheel_tag(kind, platform)
+                    found.append(
+                        Wheel(line, version, tag, platform, kind, pin)
+                    )
     return found
 
 

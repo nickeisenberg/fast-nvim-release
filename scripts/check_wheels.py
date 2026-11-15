@@ -124,7 +124,7 @@ def check(path: Path, data: Optional[lines.LineJson] = None) -> List[str]:
         expected = {
             "version": spec.version,
             "line": line,
-            "neovim": spec.build.version,
+            "neovim": spec.neovim,
             "platform": spec.platform.key,
             "tag": tag,
         }

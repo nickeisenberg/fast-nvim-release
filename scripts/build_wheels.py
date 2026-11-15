@@ -58,14 +58,14 @@ def published(index: str, version: str) -> Set[str]:
 
 
 def select(
-    line_keys: List[str], tags: List[str], skip_published: str = ""
+    line_names: List[str], tags: List[str], skip_published: str = ""
 ) -> List[Wheel]:
     host = host_wheel_tag()
     wanted_tags = {host if tag == "host" else tag for tag in tags}
     chosen = [
         wheel
         for wheel in lines.wheels()
-        if (not line_keys or wheel.line in line_keys)
+        if (not line_names or wheel.line in line_names)
         and (not tags or wheel.tag in wanted_tags)
     ]
     if skip_published:
