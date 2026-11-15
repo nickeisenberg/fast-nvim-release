@@ -169,11 +169,13 @@ def fetch(wheel: Wheel, dest: Path = DEST) -> None:
 
     license_file = dest / lines.license_name(wheel.line)
     if not license_file.is_file():
-        download(lines.license_url(wheel.line, lines.load()), license_file)
+        download(
+            lines.license_url(wheel.line, lines.load_line_json()), license_file
+        )
 
 
 def main(argv=None) -> int:
-    data = lines.load()
+    data = lines.load_line_json()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--line", choices=list(data.lines), default=lines.newest_line(data)

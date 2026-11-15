@@ -20,9 +20,11 @@ import struct
 import sys
 import zipfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 import lines
+
+from fast_nvim_release.platforms import WheelTag
 
 WHEEL_NAME = re.compile(
     r"^fast_nvim_release-(?P<line>\d+\.\d+)\.(?P<patch>\d+)\.(?P<revision>\d+)"
@@ -97,11 +99,11 @@ def macos_floor(binary: bytes) -> Optional[Tuple[int, int]]:
 
 
 def check(path: Path, data: Optional[lines.LineJson] = None) -> List[str]:
-    data = data or lines.load()
+    data = data or lines.load_line_json()
     match = WHEEL_NAME.match(path.name)
     if not match:
         return [f"unexpected wheel name: {path.name}"]
-    line, tag = match.group("line"), match.group("tag")
+    line, tag = match.group("line"), cast(WheelTag, match.group("tag"))
     version = f"{line}.{match.group('patch')}.{match.group('revision')}"
     if line not in data.lines:
         return [f"{line} is not a line in lines.json"]
@@ -204,7 +206,7 @@ def main(argv=None) -> int:
     wheels = args.wheels or sorted((lines.REPOROOT / "dist").glob("*.whl"))
     if not wheels:
         parser.error("no wheels given and none in dist/")
-    data = lines.load()
+    data = lines.load_line_json()
     failed = 0
     for wheel in wheels:
         problems = check(wheel, data)

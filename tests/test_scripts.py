@@ -34,7 +34,7 @@ NEEDS_TAR_FILTERS = pytest.mark.skipif(
 # lines.json
 # --------------------------------------------------------------------------
 def test_lines_json_is_well_formed():
-    data = lines.load()
+    data = lines.load_line_json()
     assert isinstance(data.revision, int) and data.revision >= 1
     specs = data.lines
     assert list(specs) == sorted(specs, key=lines.line_key)
@@ -51,7 +51,7 @@ def test_lines_json_is_well_formed():
 
 
 def test_every_wheel_has_its_line_version_and_tag():
-    data = lines.load()
+    data = lines.load_line_json()
     for wheel in lines.wheels(data):
         assert wheel.version == f"{wheel.build.version[1:]}.{data.revision}"
         assert wheel.version.startswith(wheel.line + ".")
@@ -79,7 +79,7 @@ def test_known_gaps_have_no_wheel():
 
 def test_the_two_repositories_never_share_a_cache_entry():
     """Both publish v0.11.7/nvim-linux-x86_64.tar.gz; the files differ."""
-    official, old = lines.builds(lines.load().lines["0.11"])
+    official, old = lines.builds(lines.load_line_json().lines["0.11"])
     assert official.url(LINUX.key) != old.url(LINUX.key)
     assert official.sha256[LINUX.key][:16] != old.sha256[LINUX.key][:16]
 
@@ -356,7 +356,7 @@ def test_select_by_line_and_tag(monkeypatch):
         build_wheels, "host_wheel_tag", lambda: LINUX.wheel_tag
     )
     chosen = build_wheels.select([], ["host"])
-    assert {w.line for w in chosen} == set(lines.load().lines) and {
+    assert {w.line for w in chosen} == set(lines.load_line_json().lines) and {
         w.tag for w in chosen
     } == {LINUX.wheel_tag}
     assert {w.tag for w in build_wheels.select(["0.12"], [])} == {
@@ -439,7 +439,7 @@ def with_pin(data, line, kind, **changes):
 
 
 def test_update_moves_only_the_lines_that_changed():
-    data = lines.load()
+    data = lines.load_line_json()
     specs = data.lines
     current = {line: spec.official.version for line, spec in specs.items()}
     old = {
@@ -470,7 +470,7 @@ def test_update_moves_only_the_lines_that_changed():
 
 
 def test_update_keeps_deliberately_skipped_builds_out():
-    data = lines.load()
+    data = lines.load_line_json()
     upstream = _upstream(["v0.10.99"], [])
     data, _ = pins.apply(data, upstream, [("0.10", "official", "v0.10.99")])
     assert "linux-arm64" not in data.lines["0.10"].official.sha256
@@ -478,7 +478,7 @@ def test_update_keeps_deliberately_skipped_builds_out():
 
 
 def test_update_adds_a_new_release_line():
-    data = lines.load()
+    data = lines.load_line_json()
     upstream = _upstream(["v0.99.0"], [])
     changes = [c for c in pins.plan(data, upstream) if c[0] == "0.99"]
     assert changes == [("0.99", "official", "v0.99.0")]
@@ -490,7 +490,7 @@ def test_update_adds_a_new_release_line():
 
 
 def test_a_release_without_published_checksums_stops_the_update(monkeypatch):
-    data = lines.load()
+    data = lines.load_line_json()
     upstream = {
         "official": {
             "v0.12.99": _release("v0.12.99", list(PLATFORMS), digests=False)
@@ -501,7 +501,7 @@ def test_a_release_without_published_checksums_stops_the_update(monkeypatch):
 
 
 def test_a_platform_missing_from_a_release_is_a_warning(capsys):
-    data = lines.load()
+    data = lines.load_line_json()
     without_windows_arm = [key for key in PLATFORMS if key != "windows-arm64"]
     upstream = {
         "official": {"v0.12.99": _release("v0.12.99", without_windows_arm)}
@@ -516,10 +516,10 @@ def test_a_platform_missing_from_a_release_is_a_warning(capsys):
 
 def test_bump_raises_the_revision_of_every_line(tmp_path):
     path = tmp_path / "lines.json"
-    lines.save(lines.load(), path)
-    before = lines.load(path)
+    lines.save_line_json(lines.load_line_json(), path)
+    before = lines.load_line_json(path)
     assert pins.main(["--file", str(path), "bump"]) == 0
-    after = lines.load(path)
+    after = lines.load_line_json(path)
     assert after.revision == before.revision + 1
     assert after.lines == before.lines
     assert {w.version.rsplit(".", 1)[1] for w in lines.wheels(after)} == {
@@ -528,7 +528,9 @@ def test_bump_raises_the_revision_of_every_line(tmp_path):
 
 
 def test_lagging_old_glibc_builds_are_a_note():
-    data = with_pin(lines.load(), "0.12", "old_glibc", version="v0.12.1")
+    data = with_pin(
+        lines.load_line_json(), "0.12", "old_glibc", version="v0.12.1"
+    )
     assert any(note.startswith("0.12:") for note in pins.lagging(data))
 
 
@@ -537,10 +539,10 @@ def test_lagging_old_glibc_builds_are_a_note():
 # --------------------------------------------------------------------------
 def test_release_notes_list_each_wheels_neovim(tmp_path):
     data = with_pin(
-        lines.load(),
+        lines.load_line_json(),
         "0.12",
         "old_glibc",
-        version=lines.load().lines["0.12"].official.version,
+        version=lines.load_line_json().lines["0.12"].official.version,
     )
     official = fake_wheel(tmp_path, lines.find("0.12", LINUX.wheel_tag, data))
     old = fake_wheel(tmp_path, lines.find("0.12", OLD_X86, data))
@@ -553,7 +555,9 @@ def test_release_notes_list_each_wheels_neovim(tmp_path):
 
 
 def test_a_lagging_old_glibc_build_is_its_own_version():
-    data = with_pin(lines.load(), "0.12", "official", version="v0.12.6")
+    data = with_pin(
+        lines.load_line_json(), "0.12", "official", version="v0.12.6"
+    )
     data = with_pin(data, "0.12", "old_glibc", version="v0.12.5")
     revision = data.revision
     assert (

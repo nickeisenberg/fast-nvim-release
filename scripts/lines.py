@@ -51,7 +51,7 @@ REPOS: Dict[BuildKind, str] = {
 
 
 @dataclass(frozen=True)
-class BuildSpec:
+class BuildPin:
     """One kind's pin inside a line: what ``lines.json`` records."""
 
     version: str  #: the Neovim release, e.g. ``v0.12.6``
@@ -72,7 +72,7 @@ class BuildSpec:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> BuildSpec:
+    def from_dict(cls, data: dict) -> BuildPin:
         return cls(
             version=data["version"],
             sha256=dict(data["sha256"]),
@@ -85,10 +85,10 @@ class BuildSpec:
 class LineSpec:
     """One Neovim line, e.g. ``0.12``: its official build and, if any, the glibc 2.17 one."""
 
-    official: BuildSpec
-    old_glibc: Optional[BuildSpec] = None
+    official: BuildPin
+    old_glibc: Optional[BuildPin] = None
 
-    def pin(self, kind: BuildKind) -> Optional[BuildSpec]:
+    def pin(self, kind: BuildKind) -> Optional[BuildPin]:
         """The pin for ``kind`` (``None`` if this line has no such build)."""
         return self.old_glibc if kind == "old_glibc" else self.official
 
@@ -102,8 +102,8 @@ class LineSpec:
     def from_dict(cls, data: dict) -> LineSpec:
         old_glibc = data.get("old_glibc")
         return cls(
-            official=BuildSpec.from_dict(data["official"]),
-            old_glibc=BuildSpec.from_dict(old_glibc) if old_glibc else None,
+            official=BuildPin.from_dict(data["official"]),
+            old_glibc=BuildPin.from_dict(old_glibc) if old_glibc else None,
         )
 
 
@@ -180,13 +180,13 @@ def line_key(line: str) -> Tuple[int, ...]:
     return tuple(int(part) for part in line.split("."))
 
 
-def load(path: Path = LINES_FILE) -> LineJson:
+def load_line_json(path: Path = LINES_FILE) -> LineJson:
     """``lines.json`` as a :class:`LineJson`, lines oldest first."""
     return LineJson.load(path)
 
 
-def save(data: LineJson, path: Path = LINES_FILE) -> None:
-    data.save(path)
+def save_line_json(line_json: LineJson, path: Path = LINES_FILE) -> None:
+    line_json.save(path)
 
 
 def license_name(line: str) -> str:
@@ -200,16 +200,19 @@ def license_url(line: str, data: LineJson) -> str:
     return f"https://raw.githubusercontent.com/neovim/neovim/{tag}/LICENSE.txt"
 
 
-def newest_line(data: Optional[LineJson] = None) -> str:
-    return list((data or load()).lines)[-1]
+def newest_line(line_json: Optional[LineJson] = None) -> str:
+    return list((line_json or load_line_json()).lines)[-1]
 
 
 def builds(spec: LineSpec) -> List[Build]:
-    return [
-        Build(kind, pin.version, dict(pin.sha256))
-        for kind in KINDS
-        if (pin := spec.pin(kind)) is not None
-    ]
+    found = []
+    for kind in KINDS:
+        build_spec = spec.pin(kind)
+        if build_spec is not None:
+            found.append(
+                Build(kind, build_spec.version, dict(build_spec.sha256))
+            )
+    return found
 
 
 def package_version(build: Build, revision: int) -> str:
@@ -217,13 +220,13 @@ def package_version(build: Build, revision: int) -> str:
     return f"{build.version.lstrip('v')}.{revision}"
 
 
-def wheels(data: Optional[LineJson] = None) -> List[Wheel]:
+def wheels(line_json: Optional[LineJson] = None) -> List[Wheel]:
     """Every wheel ``lines.json`` describes, newest line last."""
-    data = data or load()
+    line_json = line_json or load_line_json()
     found = []
-    for line, spec in data.lines.items():
+    for line, spec in line_json.lines.items():
         for build in builds(spec):
-            version = package_version(build, data.revision)
+            version = package_version(build, line_json.revision)
             for key, platform in PLATFORMS.items():
                 if key not in build.sha256:
                     continue
@@ -236,7 +239,7 @@ def wheels(data: Optional[LineJson] = None) -> List[Wheel]:
     return found
 
 
-def find(line: str, tag: str, data: Optional[LineJson] = None) -> Wheel:
+def find(line: str, tag: WheelTag, data: Optional[LineJson] = None) -> Wheel:
     """The wheel for ``line`` with platform ``tag``; ``KeyError`` saying what exists."""
     candidates = [wheel for wheel in wheels(data) if wheel.line == line]
     for wheel in candidates:

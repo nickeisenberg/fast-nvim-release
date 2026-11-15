@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import lines
-from lines import BuildKind, BuildSpec, LineJson, LineSpec
+from lines import BuildKind, BuildPin, LineJson, LineSpec
 
 from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS, PlatformKey
 
@@ -164,7 +164,7 @@ def apply(
         sha = checksums(upstream[kind][tag], wanted)
         if not sha:
             continue
-        new_pin = BuildSpec(version=tag, sha256=sha, skip=skip)
+        new_pin = BuildPin(version=tag, sha256=sha, skip=skip)
         if spec is None:
             specs[line] = LineSpec(official=new_pin)
         else:
@@ -216,7 +216,7 @@ def cmd_update(args, data, upstream) -> int:
             print(
                 f"{wheel.line} -> {wheel.version} ({wheel.build.kind} {wheel.build.version})"
             )
-    lines.save(data, args.file)
+    lines.save_line_json(data, args.file)
     if not touched:
         print("every pin is the newest patch")
     return 0
@@ -229,7 +229,7 @@ def cmd_bump(args, data, _upstream) -> int:
         {w.version for w in lines.wheels(data)}, key=lines.line_key
     ):
         print(f"  {version}")
-    lines.save(data, args.file)
+    lines.save_line_json(data, args.file)
     return 0
 
 
@@ -249,7 +249,7 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
 
-    data = lines.load(args.file)
+    data = lines.load_line_json(args.file)
     upstream: Optional[Dict[str, Dict[str, dict]]] = None
     if args.command != "bump":
         try:
