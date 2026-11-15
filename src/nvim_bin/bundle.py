@@ -2,10 +2,10 @@
 
 Each wheel carries one complete Neovim tree, for one line and one platform::
 
-    fast_nvim_release/_nvim/bin/nvim
-    fast_nvim_release/_nvim/lib/nvim/...
-    fast_nvim_release/_nvim/share/nvim/runtime/...
-    fast_nvim_release/_nvim/build.json        which build this is
+    nvim_bin/_nvim/bin/nvim
+    nvim_bin/_nvim/lib/nvim/...
+    nvim_bin/_nvim/share/nvim/runtime/...
+    nvim_bin/_nvim/build.json        which build this is
 
 Neovim finds its runtime relative to its own executable
 (``../share/nvim/runtime``), so ``setup`` copies the tree into the prefix with
@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Iterable, Optional, Set, Tuple, Union
 
-from fast_nvim_release.platforms import PLATFORMS, Platform, host_platform
+from nvim_bin.platforms import PLATFORMS, Platform, host_platform
 
 BUNDLE_ROOT = Path(__file__).resolve().parent / "_nvim"
 
@@ -30,7 +30,7 @@ BUNDLE_ROOT = Path(__file__).resolve().parent / "_nvim"
 PARTS = ("bin", "lib/nvim", "share/nvim/runtime")
 
 #: Records what this tool installed into a prefix.
-MARKER = Path("share") / "fast-nvim-release" / "install.json"
+MARKER = Path("share") / "nvim-bin" / "install.json"
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class BuildJson:
     tag: str
 
 
-class FastNvimError(RuntimeError):
+class NvimBinError(RuntimeError):
     """Something the user can fix; reported without a traceback."""
 
 
@@ -74,15 +74,15 @@ def bundled_platform() -> Platform:
         return PLATFORMS[key]
     here = host_platform()
     if here is None:
-        raise FastNvimError("there is no Neovim build for this platform")
+        raise NvimBinError("there is no Neovim build for this platform")
     return here
 
 
 def bundled_exe() -> Path:
-    """The bundled executable, or a :class:`FastNvimError` saying why there is none."""
+    """The bundled executable, or a :class:`NvimBinError` saying why there is none."""
     exe = BUNDLE_ROOT / "bin" / bundled_platform().exe
     if not exe.is_file():
-        raise FastNvimError(
+        raise NvimBinError(
             "this installation carries no Neovim build "
             "(built from source without running scripts/fetch_nvim.py first?)"
         )
@@ -113,7 +113,7 @@ def default_prefix() -> Path:
         base = (
             os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
         )
-        return normalize(Path(base) / "fast-nvim-release")
+        return normalize(Path(base) / "nvim-bin")
     return normalize(Path.home() / ".local")
 
 
@@ -224,8 +224,8 @@ def install(prefix: Path, *, force: bool = False) -> Path:
                 prefix / part for part in PARTS[1:] if (prefix / part).exists()
             ]
         if foreign:
-            raise FastNvimError(
-                "not installed by fast-nvim-release, so not overwritten:\n  "
+            raise NvimBinError(
+                "not installed by nvim-bin, so not overwritten:\n  "
                 + "\n  ".join(str(path) for path in foreign)
                 + "\n  re-run with --force to replace them, or pick another --prefix"
             )
@@ -270,7 +270,7 @@ def verify(exe: Path, prefix: Path) -> None:
             [str(exe), *PROBE_ARGS], capture_output=True, timeout=60, env=env
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise FastNvimError(
+        raise NvimBinError(
             f"installed, but {exe} does not run: {exc}"
         ) from exc
     reported = result.stdout.decode("utf-8", "replace").strip()
@@ -281,7 +281,7 @@ def verify(exe: Path, prefix: Path) -> None:
         or Path(reported).resolve() != expected
     ):
         detail = result.stderr.decode("utf-8", "replace").strip()
-        raise FastNvimError(
+        raise NvimBinError(
             f"installed, but {exe} did not start with the runtime in {expected}"
             f" (it reported {reported or 'nothing'!r}, exit {result.returncode})"
             + (f"\n{detail}" if detail else "")

@@ -1,7 +1,7 @@
 """Build hook: version and tag the wheel from the Neovim build it carries.
 
 ``scripts/fetch_nvim.py`` unpacks one Neovim build into
-``src/fast_nvim_release/_nvim/`` and records it in ``_nvim/build.json``: the
+``src/nvim_bin/_nvim/`` and records it in ``_nvim/build.json``: the
 package version (``<neovim>.<revision>``, e.g. ``0.12.6.1``) and the wheel's
 platform tag.
 This file reads both from there, so ``fetch_nvim.py`` then ``pip install .``
@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover - older toolchains
 BUILD_JSON = (
     Path(__file__).resolve().parent
     / "src"
-    / "fast_nvim_release"
+    / "nvim_bin"
     / "_nvim"
     / "build.json"
 )
@@ -64,7 +64,7 @@ class SourceDist(sdist):
     """An sdist never carries the vendored binaries, only the tracked files."""
 
     VENDORED = re.compile(
-        r"^src/fast_nvim_release/_nvim/(?!LICENSE\.nvim-[^/]+\.txt$|\.gitkeep$)"
+        r"^src/nvim_bin/_nvim/(?!LICENSE\.nvim-[^/]+\.txt$|\.gitkeep$)"
     )
 
     def make_release_tree(self, base_dir, files):

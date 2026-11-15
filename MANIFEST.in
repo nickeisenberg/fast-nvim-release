@@ -2,4 +2,4 @@ include README.md
 include LICENSE
 include THIRD_PARTY_NOTICES.md
 include CONTRIBUTING.md
-recursive-include src/fast_nvim_release/_nvim *
+recursive-include src/nvim_bin/_nvim *

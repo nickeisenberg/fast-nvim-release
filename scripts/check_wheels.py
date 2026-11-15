@@ -3,7 +3,7 @@
 
     python scripts/check_wheels.py [dist/*.whl]
 
-A wheel ``fast_nvim_release-<neovim>.<revision>-py3-none-<tag>.whl`` must carry
+A wheel ``nvim_bin-<neovim>.<revision>-py3-none-<tag>.whl`` must carry
 exactly the build ``lines.json`` pins for that line and tag, that Neovim
 version and the current revision (``build.json`` says so),
 with its executable, a complete runtime and its line's Neovim license.  The
@@ -24,10 +24,10 @@ from typing import List, Optional, Tuple, cast
 
 import lines
 
-from fast_nvim_release.platforms import WheelTag
+from nvim_bin.platforms import WheelTag
 
 WHEEL_NAME = re.compile(
-    r"^fast_nvim_release-(?P<line>\d+\.\d+)\.(?P<patch>\d+)\.(?P<revision>\d+)"
+    r"^nvim_bin-(?P<line>\d+\.\d+)\.(?P<patch>\d+)\.(?P<revision>\d+)"
     r"-py3-none-(?P<tag>.+)\.whl$"
 )
 MANYLINUX = re.compile(r"^manylinux_(\d+)_(\d+)_")
@@ -42,7 +42,7 @@ MACHINES = {
     ("pe", 0x8664): "x86_64",
     ("pe", 0xAA64): "arm64",
 }
-PAYLOAD = "fast_nvim_release/_nvim/"
+PAYLOAD = "nvim_bin/_nvim/"
 PYPI_MAX_BYTES = 100 * 1024 * 1024
 #: 0.10 ships ~1900 runtime files, 0.12 ~2100; far fewer means the runtime is missing
 MIN_RUNTIME_FILES = 1500

@@ -31,7 +31,7 @@ from typing import Dict, List, Literal, Optional, Tuple
 REPOROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOROOT / "src"))
 
-from fast_nvim_release.platforms import (  # noqa: E402
+from nvim_bin.platforms import (  # noqa: E402
     OLD_GLIBC_TAGS,
     PLATFORMS,
     Platform,
@@ -41,7 +41,7 @@ from fast_nvim_release.platforms import (  # noqa: E402
 
 LINES_FILE = REPOROOT / "lines.json"
 #: where fetch_nvim.py unpacks a build, and where the tracked licenses live
-NVIM_DIR = REPOROOT / "src" / "fast_nvim_release" / "_nvim"
+NVIM_DIR = REPOROOT / "src" / "nvim_bin" / "_nvim"
 BuildKind = Literal["official", "old_glibc"]
 KINDS: Tuple[BuildKind, ...] = ("official", "old_glibc")
 REPOS: Dict[BuildKind, str] = {
@@ -173,7 +173,7 @@ class Wheel:
 
     @property
     def filename(self) -> str:
-        return f"fast_nvim_release-{self.version}-py3-none-{self.tag}.whl"
+        return f"nvim_bin-{self.version}-py3-none-{self.tag}.whl"
 
 
 def line_key(line: str) -> Tuple[int, ...]:

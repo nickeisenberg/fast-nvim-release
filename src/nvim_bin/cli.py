@@ -1,4 +1,4 @@
-"""Command line interface: ``fast-nvim-release setup | path | run``.
+"""Command line interface: ``nvim-bin setup | path | run``.
 
 This is the stable interface.  The package version (``0.12.6.1``) names the
 Neovim version inside, so it cannot announce breaking changes: commands and
@@ -15,10 +15,10 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from fast_nvim_release import __version__, bundle
-from fast_nvim_release.bundle import FastNvimError
+from nvim_bin import __version__, bundle
+from nvim_bin.bundle import NvimBinError
 
-PROG = "fast-nvim-release"
+PROG = "nvim-bin"
 
 
 def _version_text() -> str:
@@ -61,7 +61,7 @@ def cmd_path(prefix: Optional[str]) -> int:
     prefix_ = bundle.normalize(prefix) if prefix else bundle.default_prefix()
     exe = prefix_ / "bin" / ("nvim.exe" if os.name == "nt" else "nvim")
     if bundle.installed(prefix_) is None or not exe.is_file():
-        raise FastNvimError(f"{PROG} has not installed Neovim in {prefix_}")
+        raise NvimBinError(f"{PROG} has not installed Neovim in {prefix_}")
     print(exe)
     return 0
 
@@ -88,8 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
         description="Install the Neovim bundled in this package. The package version is "
-        'the Neovim version plus a revision: pip install "fast-nvim-release==0.11.*" '
-        'picks a line, "fast-nvim-release==0.11.7.*" an exact Neovim.',
+        'the Neovim version plus a revision: pip install "nvim-bin==0.11.*" '
+        'picks a line, "nvim-bin==0.11.7.*" an exact Neovim.',
         epilog=f"example: {PROG} setup --prefix ~/.local",
     )
     parser.add_argument("--version", action="version", version=_version_text())
@@ -141,7 +141,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             parser.print_help()
             return 0
         return parsed.func(parsed)
-    except (FastNvimError, OSError) as exc:
+    except (NvimBinError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

@@ -20,7 +20,7 @@ import pytest
 import release_notes
 from conftest import POSIX_ONLY
 
-from fast_nvim_release.platforms import OLD_GLIBC_TAGS, PLATFORMS
+from nvim_bin.platforms import OLD_GLIBC_TAGS, PLATFORMS
 
 LINUX = PLATFORMS["linux-x86_64"]
 OLD_X86 = OLD_GLIBC_TAGS["linux-x86_64"]
@@ -145,7 +145,7 @@ def test_unpack_a_windows_zip(tmp_path):
 def test_an_archive_that_does_not_match_its_pin_is_refused(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("FAST_NVIM_RELEASE_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("NVIM_BIN_CACHE_DIR", str(tmp_path))
 
     def evil(url, dest):
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -158,7 +158,7 @@ def test_an_archive_that_does_not_match_its_pin_is_refused(
 
 
 def test_a_verified_cached_archive_is_reused(tmp_path, monkeypatch):
-    monkeypatch.setenv("FAST_NVIM_RELEASE_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("NVIM_BIN_CACHE_DIR", str(tmp_path))
     data = b"archive"
     digest = hashlib.sha256(data).hexdigest()
     build = lines.Build("official", "v0.12.6", {LINUX.key: digest})
@@ -246,7 +246,7 @@ def fake_wheel(
     binary=None,
 ):
     version = version or wheel.version
-    path = tmp_path / f"fast_nvim_release-{version}-py3-none-{wheel.tag}.whl"
+    path = tmp_path / f"nvim_bin-{version}-py3-none-{wheel.tag}.whl"
     if glibc is None:
         glibc = b"GLIBC_2.17" if "2_17" in wheel.tag else b"GLIBC_2.34"
     if binary is None:
@@ -260,7 +260,7 @@ def fake_wheel(
         **(info_override or {}),
     }
     with zipfile.ZipFile(path, "w") as zf:
-        root = "fast_nvim_release/_nvim/"
+        root = "nvim_bin/_nvim/"
         zf.writestr(root + "build.json", json.dumps(info))
         exe = zipfile.ZipInfo(f"{root}bin/{wheel.platform.exe}")
         exe.external_attr = 0o755 << 16
@@ -268,7 +268,7 @@ def fake_wheel(
         for n in range(runtime):
             zf.writestr(f"{root}share/nvim/runtime/f{n}.vim", b"")
         zf.writestr(f"{root}LICENSE.nvim-{wheel.line}.txt", b"Apache")
-        meta = f"fast_nvim_release-{version}.dist-info/"
+        meta = f"nvim_bin-{version}.dist-info/"
         tags = "".join(
             f"Tag: py3-none-{part}\n" for part in wheel.tag.split(".")
         )
@@ -335,7 +335,7 @@ def test_an_executable_that_cannot_run_under_its_tag_fails(
 def test_a_wheel_carries_only_its_own_lines_license(tmp_path):
     path = fake_wheel(tmp_path, lines.find("0.12", LINUX.wheel_tag))
     with zipfile.ZipFile(path, "a") as zf:
-        zf.writestr("fast_nvim_release/_nvim/LICENSE.nvim-0.10.txt", b"Apache")
+        zf.writestr("nvim_bin/_nvim/LICENSE.nvim-0.10.txt", b"Apache")
     problems = check_wheels.check(path)
     assert any("other lines' licenses" in item for item in problems), problems
 
@@ -549,8 +549,8 @@ def test_release_notes_list_each_wheels_neovim(tmp_path):
     notes = release_notes.notes([official, old])
     (version,) = notes
     neovim = version.rsplit(".", 1)[0]
-    assert f'pip install "fast-nvim-release=={neovim}.*"' in notes[version]
-    assert '"fast-nvim-release==0.12.*"' in notes[version]
+    assert f'pip install "nvim-bin=={neovim}.*"' in notes[version]
+    assert '"nvim-bin==0.12.*"' in notes[version]
     assert LINUX.wheel_tag in notes[version] and OLD_X86 in notes[version]
 
 

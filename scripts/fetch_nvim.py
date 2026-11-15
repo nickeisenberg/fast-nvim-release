@@ -5,10 +5,10 @@
     python scripts/fetch_nvim.py --line 0.11          # another line
     python scripts/fetch_nvim.py --line 0.11 --wheel win_arm64   # cross-build
 
-The build is unpacked into ``src/fast_nvim_release/_nvim/`` (replacing
+The build is unpacked into ``src/nvim_bin/_nvim/`` (replacing
 whatever was there) together with ``build.json``, which ``setup.py`` reads for
 the package version and wheel tag.  Archives are cached in
-``~/.cache/fast-nvim-release`` (``FAST_NVIM_RELEASE_CACHE_DIR``) and checked
+``~/.cache/nvim-bin`` (``NVIM_BIN_CACHE_DIR``) and checked
 against the sha256 pinned in ``lines.json`` every time they are used.
 """
 
@@ -30,8 +30,8 @@ from pathlib import Path
 import lines
 from lines import Build, Wheel
 
-from fast_nvim_release.bundle import PARTS, BuildJson
-from fast_nvim_release.platforms import Platform, host_platform, host_wheel_tag
+from nvim_bin.bundle import PARTS, BuildJson
+from nvim_bin.platforms import Platform, host_platform, host_wheel_tag
 
 DEST = lines.NVIM_DIR
 #: files in ``DEST`` that are tracked in git, not produced by this script
@@ -39,11 +39,11 @@ TRACKED = (".gitkeep",)
 
 
 def cache_dir() -> Path:
-    override = os.environ.get("FAST_NVIM_RELEASE_CACHE_DIR")
+    override = os.environ.get("NVIM_BIN_CACHE_DIR")
     return (
         Path(override).expanduser()
         if override
-        else Path.home() / ".cache" / "fast-nvim-release"
+        else Path.home() / ".cache" / "nvim-bin"
     )
 
 
@@ -57,7 +57,7 @@ def sha256(path: Path) -> str:
 
 def download(url: str, dest: Path) -> None:
     request = urllib.request.Request(
-        url, headers={"User-Agent": "fast-nvim-release-build"}
+        url, headers={"User-Agent": "nvim-bin-build"}
     )
     partial = dest.with_name(dest.name + ".part")
     dest.parent.mkdir(parents=True, exist_ok=True)

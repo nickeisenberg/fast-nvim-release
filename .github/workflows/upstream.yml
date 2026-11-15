@@ -44,7 +44,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # a new line also brings its (untracked) LICENSE.nvim-<line>.txt
-          git add lines.json src/fast_nvim_release/_nvim/
+          git add lines.json src/nvim_bin/_nvim/
           if git diff --cached --quiet; then echo "every pin is current"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -1,10 +1,10 @@
-# Contributing to fast-nvim-release
+# Contributing to nvim-bin
 
 ## Getting started
 
 ```console
-$ git clone git@github.com:nickeisenberg/fast-nvim-release.git
-$ cd fast-nvim-release
+$ git clone git@github.com:nickeisenberg/nvim-bin.git
+$ cd nvim-bin
 $ python -m pip install -r requirements-ci.txt   # the pinned tools CI uses
 $ python -m pytest                 # the whole suite, offline, fake Neovim builds
 $ python -m ruff check .
@@ -18,9 +18,9 @@ are pinned to commit SHAs with the tag in a comment; bump both together.
 
 ```
 lines.json                          the revision, and every Neovim line's pinned builds
-src/fast_nvim_release/cli.py        setup / path / run  (the stable interface)
-src/fast_nvim_release/bundle.py     the bundled build, installing into a prefix
-src/fast_nvim_release/platforms.py  platforms, wheel tags, which machine this is
+src/nvim_bin/cli.py                 setup / path / run  (the stable interface)
+src/nvim_bin/bundle.py              the bundled build, installing into a prefix
+src/nvim_bin/platforms.py           platforms, wheel tags, which machine this is
 setup.py                            versions and tags the wheel from _nvim/build.json
 scripts/lines.py                    lines.json -> the list of wheels to build
 scripts/fetch_nvim.py               download, verify and unpack one wheel's build
@@ -64,11 +64,11 @@ $ python scripts/check_wheels.py                # validate dist/*.whl
 $ python scripts/smoke_test.py dist/*.whl       # install them and use them
 ```
 
-`fetch_nvim.py` unpacks one build into `src/fast_nvim_release/_nvim/` (git
+`fetch_nvim.py` unpacks one build into `src/nvim_bin/_nvim/` (git
 ignores it) with a `build.json` naming the version, Neovim build and wheel tag,
 which `setup.py` reads. On a Linux older than glibc 2.34 the default is the
 old-glibc wheel, so the same two commands work there. Archives are cached in
-`~/.cache/fast-nvim-release` (`FAST_NVIM_RELEASE_CACHE_DIR`) and checked against
+`~/.cache/nvim-bin` (`NVIM_BIN_CACHE_DIR`) and checked against
 `lines.json` every time. The `LICENSE.nvim-<line>.txt` files in `_nvim/` are
 tracked, because every wheel must ship its line's license (and only that one).
 
@@ -97,7 +97,7 @@ added or a platform changes.
 ## When our code changes
 
 Changes to what ends up in a wheel need a release: the installed package
-(`src/fast_nvim_release/`), and the metadata from `pyproject.toml`,
+(`src/nvim_bin/`), and the metadata from `pyproject.toml`,
 `setup.py` and `README.md` (the PyPI page). Build scripts, CI and other docs
 do not. Batch fixes, then:
 
@@ -124,7 +124,7 @@ skip the release notes.
 
 One-time setup on each index (Your account > Publishing > add a pending
 publisher, or the project's Publishing settings): repository
-`nickeisenberg/fast-nvim-release`, workflow `release.yml`, environment
+`nickeisenberg/nvim-bin`, workflow `release.yml`, environment
 `testpypi` or `pypi` (matching the GitHub environments of the same names). The
 weekly bot also needs Settings > Actions > General > "Allow GitHub Actions to
 create and approve pull requests".

@@ -41,17 +41,17 @@ def run(*cmd, ok: bool = True) -> str:
 
 def smoke(wheel: Path) -> None:
     with zipfile.ZipFile(wheel) as zf:
-        info = json.loads(zf.read("fast_nvim_release/_nvim/build.json"))
+        info = json.loads(zf.read("nvim_bin/_nvim/build.json"))
     neovim, version = info["neovim"], info["version"]
     exe = "nvim.exe" if os.name == "nt" else "nvim"
-    with tempfile.TemporaryDirectory(prefix="fast-nvim-release-smoke-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="nvim-bin-smoke-") as tmp:
         work = Path(tmp)
         venv.create(work / "venv", with_pip=True)
         scripts = work / "venv" / ("Scripts" if os.name == "nt" else "bin")
         suffix = ".exe" if os.name == "nt" else ""
         python, cli = (
             scripts / f"python{suffix}",
-            scripts / f"fast-nvim-release{suffix}",
+            scripts / f"nvim-bin{suffix}",
         )
         run(python, "-m", "pip", "install", "--no-deps", "-q", wheel)
 
