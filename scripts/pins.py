@@ -115,7 +115,7 @@ def fetch_releases(repo: str) -> Dict[str, Release]:
     return found
 
 
-def newest_patches(tags) -> Dict[str, str]:
+def newest_patches(tags: list[str]) -> Dict[str, str]:
     """line -> newest tag, e.g. ``{"0.12": "v0.12.7"}``."""
     newest: Dict[str, Tuple[int, int, int]] = {}
     for tag in tags:
@@ -171,7 +171,10 @@ def plan(data: LineJson, upstream: Upstream) -> List[Change]:
     """A change for every pin that is behind, plus one for each new line."""
     changes: List[Change] = []
     specs = data.lines
-    newest = {kind: newest_patches(upstream[kind]) for kind in KIND_KEYS}
+    newest: Dict[BuildKind, Dict[str, str]] = {}
+    for kind in KIND_KEYS:
+        tags = [release.tag for release in upstream[kind].values()]
+        newest[kind] = newest_patches(tags)
     supported = max(lines.line_key(line) for line in specs)
     for line in sorted(
         set(specs) | set(newest["official"]), key=lines.line_key
