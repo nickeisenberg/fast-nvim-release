@@ -21,7 +21,6 @@ import json
 import os
 import re
 import sys
-import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -294,8 +293,13 @@ def main(argv=None) -> int:
                 kind: fetch_releases(repo)
                 for kind, repo in lines.REPOS.items()
             }
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            print(f"error: cannot ask GitHub: {exc}", file=sys.stderr)
+        except Exception as exc:
+            # any failure here means the releases could not be had: network,
+            # a cut-off response, bad JSON or a changed format
+            print(
+                f"error: cannot ask GitHub: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
             return 2
     handler = {"check": cmd_check, "update": cmd_update, "bump": cmd_bump}[
         args.command

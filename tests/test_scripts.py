@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import io
 import json
 import re
@@ -539,6 +540,17 @@ def test_a_platform_missing_from_a_release_is_a_warning(capsys):
     assert (
         "warning: v0.12.99 has no nvim-win-arm64.zip"
         in capsys.readouterr().err
+    )
+
+
+def test_a_failed_github_request_is_a_clean_error(monkeypatch, capsys):
+    def cut_off(repo):
+        raise http.client.IncompleteRead(b"[", 100)
+
+    monkeypatch.setattr(pins, "fetch_releases", cut_off)
+    assert pins.main(["check"]) == 2
+    assert (
+        "error: cannot ask GitHub: IncompleteRead" in capsys.readouterr().err
     )
 
 
