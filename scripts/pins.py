@@ -60,6 +60,7 @@ class Asset:
 @dataclass(frozen=True)
 class Release:
     tag: str
+    stable: bool  #: not a draft or a prerelease
     assets: Dict[str, Asset]  #: asset name -> asset
 
     @classmethod
@@ -67,6 +68,7 @@ class Release:
         assets = (Asset.from_dict(asset) for asset in data.get("assets", []))
         return cls(
             tag=data["tag_name"],
+            stable=not (data["draft"] or data["prerelease"]),
             assets={asset.name: asset for asset in assets},
         )
 
@@ -104,11 +106,10 @@ def fetch_releases(repo: str) -> Dict[str, Release]:
     found: Dict[str, Release] = {}
     for page in range(1, 6):
         batch = json.loads(_get(API.format(repo, page)))
-        for release in batch:
-            if not (release["draft"] or release["prerelease"]) and TAG.match(
-                release["tag_name"]
-            ):
-                found[release["tag_name"]] = Release.from_dict(release)
+        for raw in batch:
+            release = Release.from_dict(raw)
+            if release.stable and TAG.match(release.tag):
+                found[release.tag] = release
         if len(batch) < 100:
             break
     return found

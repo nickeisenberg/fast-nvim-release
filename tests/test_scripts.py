@@ -412,7 +412,7 @@ def _release(tag, platform_keys, digests=True):
             sha256=digest if digests else None,
             url=f"https://example.invalid/{tag}/{name}",
         )
-    return pins.Release(tag=tag, assets=assets)
+    return pins.Release(tag=tag, stable=True, assets=assets)
 
 
 def _upstream(official, old):
@@ -427,6 +427,7 @@ def test_a_release_is_read_from_githubs_json():
         {
             "tag_name": "v0.12.6",
             "draft": False,
+            "prerelease": False,
             "assets": [
                 {
                     "name": "a.tar.gz",
@@ -442,9 +443,20 @@ def test_a_release_is_read_from_githubs_json():
         }
     )
     assert release.tag == "v0.12.6"
+    assert release.stable
     assert release.assets["a.tar.gz"].sha256 == "ab" * 32
     assert release.assets["b.zip"].sha256 is None
     assert release.assets["b.zip"].url == "https://example.invalid/b"
+
+
+@pytest.mark.parametrize(
+    "draft, prerelease", [(True, False), (False, True), (True, True)]
+)
+def test_drafts_and_prereleases_are_not_stable(draft, prerelease):
+    release = pins.Release.from_dict(
+        {"tag_name": "v0.13.0", "draft": draft, "prerelease": prerelease}
+    )
+    assert not release.stable
 
 
 def test_newest_patch_per_line():
