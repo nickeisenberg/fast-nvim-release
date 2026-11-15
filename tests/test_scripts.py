@@ -548,10 +548,33 @@ def test_a_failed_github_request_is_a_clean_error(monkeypatch, capsys):
         raise http.client.IncompleteRead(b"[", 100)
 
     monkeypatch.setattr(pins, "fetch_releases", cut_off)
-    assert pins.main(["check"]) == 2
+    assert pins.main(["update", "--dry-run"]) == 2
     assert (
         "error: cannot ask GitHub: IncompleteRead" in capsys.readouterr().err
     )
+
+
+def test_a_dry_run_reports_the_update_and_writes_nothing(
+    tmp_path, monkeypatch, capsys
+):
+    path = tmp_path / "lines.json"
+    lines.save_line_json(lines.load_line_json(), path)
+    before = path.read_bytes()
+    data = lines.load_line_json(path)
+    current = [spec.official.version for spec in data.lines.values()]
+    old = [s.old_glibc.version for s in data.lines.values() if s.old_glibc]
+    upstream = _upstream([*current, "v0.12.99"], old)  # Neovim ships 0.12.99
+    by_repo = {repo: upstream[kind] for kind, repo in lines.REPOS.items()}
+    monkeypatch.setattr(pins, "fetch_releases", by_repo.__getitem__)
+    monkeypatch.setattr(
+        pins, "ensure_license", lambda *a: pytest.fail("wrote a license")
+    )
+
+    assert pins.main(["--file", str(path), "update", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert f"0.12 -> 0.12.99.{data.revision} (official v0.12.99)" in out
+    assert "dry run: lines.json not written" in out
+    assert path.read_bytes() == before
 
 
 def test_bump_raises_the_revision_of_every_line(tmp_path):

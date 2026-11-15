@@ -80,8 +80,9 @@ checksums GitHub publishes and adds new lines (the revision stays), and opens
 a pull request (branch `pins/update`) with CI started on it. Review
 `lines.json`, wait for CI, merge, then release.
 
-By hand: `python scripts/pins.py check` reports, `python scripts/pins.py update`
-edits `lines.json` the same way.
+By hand: `python scripts/pins.py update --dry-run` shows what would move and
+writes nothing; `python scripts/pins.py update` edits `lines.json` the same
+way the workflow does.
 
 A new line's builds are checked against their tags: `check_wheels.py` fails
 if an executable is built for another CPU, or needs a newer glibc or macOS

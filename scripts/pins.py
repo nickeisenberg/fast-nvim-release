@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep ``lines.json`` in step with Neovim's releases, and bump the revision.
 
-    python scripts/pins.py check [--strict]   # is every pin the newest patch?
+    python scripts/pins.py update --dry-run   # what would move; writes nothing
     python scripts/pins.py update             # move pins to the newest patches
     python scripts/pins.py bump               # after changing our installed code
 
@@ -10,6 +10,8 @@ official builds, ``neovim/neovim-releases`` for the glibc 2.17 ones), moves
 every pin to the newest patch of its line with the checksums GitHub
 publishes, and adds new release lines.  A new patch is a new package version
 by itself (``0.12.7.<revision>``), so ``update`` leaves the revision alone.
+``--dry-run`` does all of that but writes nothing: neither ``lines.json`` nor
+a new line's license file.
 ``bump`` raises the revision, which re-releases every line's current patch.
 Set ``GITHUB_TOKEN`` to lift the anonymous API rate limit.
 """
@@ -224,37 +226,26 @@ def lagging(data: LineJson) -> List[str]:
     ]
 
 
-def cmd_check(args, data, upstream) -> int:
-    changes = plan(data, upstream)
-    for change in changes:
-        spec = data.lines.get(change.line)
-        pin = spec.pin(change.kind) if spec else None
-        pinned = pin.version if pin else "nothing"
-        print(
-            f"behind: {change.line} {change.kind} pinned {pinned}, "
-            f"{lines.REPOS[change.kind]} has {change.tag}"
-        )
-    for note in lagging(data):
-        print(f"note: {note}")
-    if not changes:
-        print("every pin is the newest patch")
-    return 1 if changes and args.strict else 0
-
-
 def cmd_update(args, data, upstream) -> int:
     data, touched = apply(data, upstream, plan(data, upstream))
     printed: List[str] = []
-    for line in touched:
-        ensure_license(line, data)
     for wheel in lines.wheels(data):
         if wheel.line in touched and wheel.version not in printed:
             printed.append(wheel.version)
             print(
                 f"{wheel.line} -> {wheel.version} ({wheel.build.kind} {wheel.build.version})"
             )
-    lines.save_line_json(data, args.file)
+    for note in lagging(data):
+        print(f"note: {note}")
     if not touched:
         print("every pin is the newest patch")
+    if args.dry_run:
+        if touched:
+            print("dry run: lines.json not written")
+        return 0
+    for line in touched:
+        ensure_license(line, data)
+    lines.save_line_json(data, args.file)
     return 0
 
 
@@ -275,11 +266,14 @@ def main(argv=None) -> int:
         "--file", type=Path, default=lines.LINES_FILE, help=argparse.SUPPRESS
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    check = commands.add_parser("check", help="report pins that are behind")
-    check.add_argument(
-        "--strict", action="store_true", help="exit 1 if any pin is behind"
+    update = commands.add_parser(
+        "update", help="move pins to the newest patches"
     )
-    commands.add_parser("update", help="move pins to the newest patches")
+    update.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show what would move, without writing anything",
+    )
     commands.add_parser(
         "bump", help="raise the revision (re-release every line)"
     )
@@ -301,9 +295,7 @@ def main(argv=None) -> int:
                 file=sys.stderr,
             )
             return 2
-    handler = {"check": cmd_check, "update": cmd_update, "bump": cmd_bump}[
-        args.command
-    ]
+    handler = {"update": cmd_update, "bump": cmd_bump}[args.command]
     return handler(args, data, upstream)
 
 
