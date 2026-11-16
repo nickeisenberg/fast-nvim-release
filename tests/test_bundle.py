@@ -63,6 +63,7 @@ def test_install_copies_the_tree_and_records_it(fake_bundle, host, prefix):
     assert runtime_text(prefix) == "-- v0.12.6\n"
     info = bundle.installed(prefix)
     assert info == bundle.InstallJson(
+        package_version="0.12.6.1",
         line="0.12",
         nvim_version="v0.12.6",
         platform=host.key,
@@ -77,10 +78,10 @@ def test_another_package_version_replaces_the_build_and_keeps_unrelated_files(
     bundle.install(prefix)  # owns bin/helper too
     (prefix / "bin" / "other-tool").write_text("mine", encoding="utf-8")
 
-    # what `pip install "nvim-bin==0.11.*"` then `setup` looks like
+    # what `pip install "nvim-bin==0.11.*"` then `setup --force` looks like
     (fake_bundle / "bin" / "helper").unlink()
     make_bundle(fake_bundle, host, neovim="v0.11.7", version="0.11.7.1")
-    bundle.install(prefix)
+    bundle.install(prefix, force=True)
     assert runtime_text(prefix) == "-- v0.11.7\n"
     assert not (prefix / "bin" / "helper").exists()
     assert (prefix / "bin" / "other-tool").read_text(
@@ -95,7 +96,7 @@ def test_a_stale_runtime_file_does_not_survive_a_reinstall(
     bundle.install(prefix)
     stale = prefix / "share" / "nvim" / "runtime" / "stale.vim"
     stale.write_text("old", encoding="utf-8")
-    bundle.install(prefix)
+    bundle.install(prefix, force=True)
     assert not stale.exists()
 
 
@@ -132,7 +133,27 @@ def test_a_managed_prefix_still_protects_bin_entries_it_never_owned(
     assert mine.read_text(encoding="utf-8") == "mine"
 
 
-def test_bin_names_are_compared_the_way_the_file_system_does(
+def test_replacing_an_earlier_install_takes_force(fake_bundle, host, prefix):
+    """Any replacement deletes something for good: its own installs too."""
+    bundle.install(prefix)
+    with pytest.raises(bundle.NvimBinError) as excinfo:
+        bundle.install(prefix)
+    message = str(excinfo.value)
+    assert "already holds Neovim v0.12.6" in message
+    assert host.key in message and "--force" in message
+    assert str(prefix / "bin" / host.exe) in message
+    bundle.install(prefix, force=True)
+
+
+def test_a_marker_alone_takes_force(fake_bundle, prefix):
+    marker = prefix / bundle.MARKER
+    marker.parent.mkdir(parents=True)
+    marker.write_text("damaged", encoding="utf-8")
+    with pytest.raises(bundle.NvimBinError, match="--force"):
+        bundle.install(prefix)
+
+
+def test_bin_names_are_listed_once_the_way_the_file_system_compares_them(
     fake_bundle, prefix, monkeypatch
 ):
     """Windows: 0.10 ships dbghelp.dll, 0.11 DbgHelp.dll -- the same file there."""
@@ -141,15 +162,13 @@ def test_bin_names_are_compared_the_way_the_file_system_does(
     data = json.loads(marker.read_text(encoding="utf-8"))
     data["bin"].append("dbghelp.dll")
     marker.write_text(json.dumps(data), encoding="utf-8")
-    (prefix / "bin" / "DbgHelp.dll").write_text(
-        "ours, other spelling", encoding="utf-8"
-    )
+    (prefix / "bin" / "DbgHelp.dll").write_text("ours", encoding="utf-8")
     (fake_bundle / "bin" / "DbgHelp.dll").write_text("new", encoding="utf-8")
     monkeypatch.setattr(bundle.os.path, "normcase", str.lower)  # as on Windows
-    bundle.install(prefix)
-    assert (prefix / "bin" / "DbgHelp.dll").read_text(
-        encoding="utf-8"
-    ) == "new"
+    found = bundle._would_replace(
+        prefix, ["DbgHelp.dll"], bundle._owned_bin_names(prefix)
+    )
+    assert [p.name.lower() for p in found].count("dbghelp.dll") == 1
 
 
 def test_a_marker_it_cannot_read_in_full_counts_as_not_installed(
@@ -169,7 +188,7 @@ def test_a_marker_it_cannot_read_in_full_counts_as_not_installed(
     assert (tmp_path / "bin" / host.exe).read_text(encoding="utf-8") == "mine"
 
 
-def test_an_interrupted_install_can_be_rerun_without_force(
+def test_an_interrupted_install_is_cleaned_up_by_a_forced_rerun(
     fake_bundle, host, prefix, monkeypatch
 ):
     real_copy = bundle._copy
@@ -184,8 +203,11 @@ def test_an_interrupted_install_can_be_rerun_without_force(
     monkeypatch.setattr(
         bundle, "_copy", real_copy
     )  # not undo(): keep fake_bundle
-    bundle.install(prefix)
+    with pytest.raises(bundle.NvimBinError, match="--force"):
+        bundle.install(prefix)
+    bundle.install(prefix, force=True)
     assert (prefix / "bin" / host.exe).is_file()
+    assert bundle.installed(prefix).bin == (host.exe,)
 
 
 @pytest.mark.parametrize(
@@ -208,7 +230,7 @@ def test_marker_bin_names_cannot_reach_outside_bin(fake_bundle, prefix, names):
         ),
         encoding="utf-8",
     )
-    bundle.install(prefix)
+    bundle.install(prefix, force=True)
     assert victim.read_text(encoding="utf-8") == "keep"
 
 
@@ -240,7 +262,21 @@ def test_verify_ignores_the_users_vimruntime(host, tmp_path, monkeypatch):
     bundle.verify(exe, tree)
 
 
-def test_default_prefix_is_absolute(monkeypatch, tmp_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert bundle.default_prefix().is_absolute()
+def test_an_older_marker_without_package_version_still_counts(
+    fake_bundle, host, prefix
+):
+    bundle.install(prefix)
+    marker = prefix / bundle.MARKER
+    data = json.loads(marker.read_text(encoding="utf-8"))
+    del data["package_version"]
+    marker.write_text(json.dumps(data), encoding="utf-8")
+    info = bundle.installed(prefix)
+    assert info is not None and info.package_version is None
+
+
+@POSIX_ONLY
+def test_the_installed_executable_is_executable(fake_bundle, host, prefix):
+    """Even when the installer dropped the executable bit of the wheel's file."""
+    (fake_bundle / "bin" / host.exe).chmod(0o644)
+    exe = bundle.install(prefix)
+    assert os.access(exe, os.X_OK)

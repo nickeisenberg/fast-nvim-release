@@ -1,15 +1,21 @@
 [build-system]
-# PEP 639 (license = "MIT", license-files) needs setuptools >= 77
-requires = ["setuptools>=77", "wheel"]
+# pinned: a release in years to come must build exactly as it does today
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nvim-bin"
-description = "Neovim from PyPI: pip install \"nvim-bin==0.12.*\", then one setup command."
+description = "Neovim from PyPI: official builds as wheels, installed with one setup command."
 readme = "README.md"
 requires-python = ">=3.9"
-license = "MIT"
-license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+# MIT for this tool; Apache-2.0 AND Vim for the bundled Neovim
+license = "MIT AND Apache-2.0 AND Vim"
+# a wheel's build tree holds only its own line's Neovim license
+license-files = [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "src/nvim_bin/_nvim/LICENSE.nvim-*.txt",
+]
 authors = [{ name = "nvim-bin contributors" }]
 keywords = ["neovim", "nvim", "editor", "binary", "wheels", "vim"]
 dynamic = ["version"]

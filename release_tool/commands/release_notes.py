@@ -50,6 +50,18 @@ def notes(wheels: List[Path]) -> Dict[str, str]:
     }
 
 
+def extended(old: str, items: List[str]) -> Optional[str]:
+    """``old`` notes with the ``items`` they lack; ``None`` if they lack none.
+
+    A re-run of a release job must not list a wheel twice.
+    """
+    present = set(old.splitlines())
+    new = [item for item in items if item not in present]
+    if not new:
+        return None
+    return old.rstrip("\n") + "\n" + "\n".join(new) + "\n"
+
+
 def existing_notes(tag: str) -> Optional[str]:
     result = subprocess.run(
         ["gh", "release", "view", tag, "--json", "body", "--jq", ".body"],
@@ -102,12 +114,9 @@ def run(args: argparse.Namespace) -> None:
             ]
             cmd += ["--target", os.environ.get("GITHUB_SHA", "HEAD")]
         else:
-            cmd = [
-                "gh",
-                "release",
-                "edit",
-                tag,
-                "--notes",
-                old.rstrip("\n") + "\n" + "\n".join(items) + "\n",
-            ]
+            notes_ = extended(old, items)
+            if notes_ is None:
+                print(f"{tag}: already lists every wheel")
+                continue
+            cmd = ["gh", "release", "edit", tag, "--notes", notes_]
         subprocess.run(cmd, check=True)

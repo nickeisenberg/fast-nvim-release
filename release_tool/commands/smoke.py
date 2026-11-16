@@ -2,9 +2,9 @@
 
     python -m release_tool smoke WHEEL [WHEEL...]
 
-For each wheel (it must run on this machine): ``--version``, ``run``,
-``setup`` and ``path``, and the installed nvim must report the Neovim version
-the wheel's ``build.json`` names.
+For each wheel (it must run on this machine): ``--version``, ``run`` and
+``setup`` (a second ``setup`` only with ``--force``), and the installed nvim
+must report the Neovim version the wheel's ``build.json`` names.
 """
 
 from __future__ import annotations
@@ -66,7 +66,8 @@ def smoke(wheel: Path) -> None:
             neovim
             in execute(prefix / "bin" / exe, "--version").splitlines()[0]
         )
-        assert str(prefix) in execute(cli, "path", "--prefix", prefix)
+        execute(cli, "setup", "--prefix", prefix, ok=False)  # needs --force
+        execute(cli, "setup", "--prefix", prefix, "--force")
     print(f"PASS {wheel.name} (Neovim {neovim})")
 
 
