@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        nvim: ["0.10", "0.11", "0.12"]  # quoted, or YAML reads 0.10 as 0.1
+        nvim: ["0.10", "0.11", "0.12"]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
