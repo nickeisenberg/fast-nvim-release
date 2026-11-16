@@ -121,6 +121,24 @@ def test_files_this_tool_did_not_install_are_never_overwritten(
     assert bundle.installed(prefix).line == "0.12"
 
 
+@pytest.mark.parametrize("force", [False, True])
+@pytest.mark.parametrize("name", ["", "bin", "lib", "share/nvim"])
+def test_a_file_where_setup_needs_a_directory_stops_it_before_it_writes(
+    fake_bundle, prefix, name, force
+):
+    blocker = prefix / name
+    blocker.parent.mkdir(parents=True, exist_ok=True)
+    blocker.write_text("in the way", encoding="utf-8")
+    with pytest.raises(bundle.NvimBinError, match="needs a directory") as exc:
+        bundle.install(prefix, force=force)
+    assert str(blocker) in str(exc.value)
+    assert blocker.read_text(encoding="utf-8") == "in the way"
+    if name:
+        assert sorted(p.name for p in prefix.iterdir()) == [
+            blocker.relative_to(prefix).parts[0]
+        ]
+
+
 def test_a_managed_prefix_still_protects_bin_entries_it_never_owned(
     fake_bundle, prefix
 ):

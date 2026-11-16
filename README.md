@@ -54,8 +54,8 @@ jobs:
       matrix:
         nvim: ["0.10", "0.11", "0.12"]  # quoted, or YAML reads 0.10 as 0.1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install "nvim-bin==${{ matrix.nvim }}.*"
@@ -203,6 +203,11 @@ To uninstall, delete what `setup` put into the prefix:
 $ rm -r <prefix>/bin/nvim <prefix>/lib/nvim <prefix>/share/nvim/runtime <prefix>/share/nvim-bin
 ```
 
+On Windows, `<prefix>\bin` also holds Neovim's DLLs and other files;
+`<prefix>\share\nvim-bin\install.json` lists every entry there that `setup`
+installed. `pip uninstall nvim-bin` removes only the package, not what
+`setup` installed.
+
 Do not delete `<prefix>/share/nvim` itself: with `--prefix ~/.local` that is
 also Neovim's data directory (`stdpath("data")`), where plugin managers keep
 your plugins. The other way round, resetting Neovim with
@@ -212,7 +217,8 @@ again afterwards.
 **Stability.** Since the version number names the Neovim inside, it cannot
 announce breaking changes in this tool. Instead, the command line is stable:
 the commands and flags above, the prefix layout, the exit codes (0 success,
-1 error, 2 bad usage) and the `--version` line keep working. Commands and
+1 error, 2 bad usage; `run` exits with Neovim's own code) and the `--version`
+line keep working. Commands and
 flags may be added, never removed or changed in meaning. Everything else
 `setup` prints is for people and may change.
 

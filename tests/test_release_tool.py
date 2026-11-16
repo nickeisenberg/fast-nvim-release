@@ -466,6 +466,23 @@ def _upstream(official, old):
     }
 
 
+def _as_pinned(data, official=(), old=()):
+    """GitHub as ``data`` pins it, plus the releases ``official`` and ``old``.
+
+    Each pinned release has exactly the archives its pin has checksums for,
+    as on GitHub (v0.10.4 has no Windows arm64 archive, for example).
+    """
+    upstream = _upstream(official, old)
+    for spec in data.lines.values():
+        for kind in lines.KINDS:
+            pin = spec.pin(kind)
+            if pin:
+                upstream[kind][pin.version] = _release(
+                    pin.version, list(pin.sha256)
+                )
+    return upstream
+
+
 def test_a_release_is_read_from_githubs_json():
     release = gh_client.Release.from_dict(
         {
@@ -523,16 +540,7 @@ def with_pin(data, line, kind, **changes):
 def test_update_moves_only_the_lines_that_changed():
     data = lines.load_line_json()
     specs = data.lines
-    current = {line: spec.official.version for line, spec in specs.items()}
-    old = {
-        line: spec.old_glibc.version
-        for line, spec in specs.items()
-        if spec.old_glibc
-    }
-    upstream = _upstream(
-        [*current.values(), "v0.12.99"],  # Neovim ships a 0.12 patch
-        [*old.values()],
-    )
+    upstream = _as_pinned(data, ["v0.12.99"])  # Neovim ships a 0.12 patch
     changes = lines.plan(data, upstream)
     assert changes == [lines.Change("0.12", "official", "v0.12.99")]
     revision = data.revision
@@ -600,6 +608,62 @@ def test_a_platform_missing_from_a_release_is_a_warning(capsys):
         "warning: v0.12.99 has no nvim-win-arm64.zip"
         in capsys.readouterr().err
     )
+
+
+def test_nothing_moves_when_every_pin_matches_github():
+    data = lines.load_line_json()
+    assert lines.plan(data, _as_pinned(data)) == []
+
+
+def test_a_platform_that_was_missing_comes_back_once_published(capsys):
+    """Pinned while windows-arm64 was still uploading; it shows up later."""
+    data = lines.load_line_json()
+    pin = data.lines["0.12"].official
+    data = with_pin(
+        data,
+        "0.12",
+        "official",
+        sha256={k: v for k, v in pin.sha256.items() if k != "windows-arm64"},
+    )
+    upstream = _as_pinned(data)
+    upstream["official"][pin.version] = _release(pin.version, list(PLATFORMS))
+    changes = lines.plan(data, upstream)
+    assert changes == [lines.Change("0.12", "official", pin.version)]
+
+    updated, touched = lines.apply(data, upstream, changes)
+    new_pin = updated.lines["0.12"].official
+    assert touched == ["0.12"] and new_pin.version == pin.version
+    assert set(new_pin.sha256) == set(PLATFORMS)
+    # the checksums already pinned are kept, never re-read from GitHub
+    for key, digest in data.lines["0.12"].official.sha256.items():
+        assert new_pin.sha256[key] == digest
+    assert lines.plan(updated, upstream) == []
+
+
+def test_a_skipped_or_never_published_platform_never_comes_back():
+    data = lines.load_line_json()
+    upstream = _as_pinned(data)
+    # v0.10.4: linux-arm64 is in skip; windows-arm64 never existed
+    v0104 = data.lines["0.10"].official.version
+    upstream["official"][v0104] = _release(
+        v0104, [k for k in PLATFORMS if k != "windows-arm64"]
+    )
+    assert lines.plan(data, upstream) == []
+
+
+def test_a_pin_gaining_a_platform_keeps_its_note():
+    """0.10's old-glibc pin has a note on how its checksum was established."""
+    data = lines.load_line_json()
+    old = data.lines["0.10"].old_glibc
+    upstream = _as_pinned(data)
+    upstream["old_glibc"][old.version] = _release(
+        old.version, ["linux-x86_64", "linux-arm64"]
+    )
+    updated, _ = lines.apply(data, upstream, lines.plan(data, upstream))
+    new_pin = updated.lines["0.10"].old_glibc
+    assert new_pin.note == old.note
+    assert new_pin.sha256["linux-x86_64"] == old.sha256["linux-x86_64"]
+    assert "linux-arm64" in new_pin.sha256
 
 
 def test_a_failed_github_request_is_a_clean_error(monkeypatch, capsys):

@@ -33,6 +33,9 @@ PARTS = ("bin", "lib/nvim", "share/nvim/runtime")
 #: Records what this tool installed into a prefix.
 MARKER = Path("share") / "nvim-bin" / "install.json"
 
+#: Directories ``setup`` creates or writes into, relative to the prefix.
+DIRS = ("", "bin", "lib", "share", "share/nvim", "share/nvim-bin")
+
 
 @dataclass(frozen=True)
 class BuildJson:
@@ -220,8 +223,18 @@ def install(prefix: Path, *, force: bool = False) -> Path:
     source = exe.parent.parent
     prefix = normalize(prefix)
     names = sorted(entry.name for entry in (source / "bin").iterdir())
-    owned = _owned_bin_names(prefix)
 
+    # checked before anything is written; not even --force removes these,
+    # since they are in the way rather than something setup installs
+    blocked = _not_directories(prefix)
+    if blocked:
+        raise NvimBinError(
+            "setup needs a directory at:\n  "
+            + "\n  ".join(str(path) for path in blocked)
+            + "\n  move or remove what is there, or pick another --prefix"
+        )
+
+    owned = _owned_bin_names(prefix)
     if not force:
         existing = _would_replace(prefix, names, owned)
         if existing:
@@ -264,6 +277,15 @@ def install(prefix: Path, *, force: bool = False) -> Path:
 
 def _exists(path: Path) -> bool:
     return path.exists() or path.is_symlink()
+
+
+def _not_directories(prefix: Path) -> List[Path]:
+    """Paths ``setup`` needs as directories that are something else."""
+    return [
+        prefix / name
+        for name in DIRS
+        if _exists(prefix / name) and not (prefix / name).is_dir()
+    ]
 
 
 def _would_replace(
