@@ -380,8 +380,23 @@ def checksums(
 # --------------------------------------------------------------------------
 # the commands
 # --------------------------------------------------------------------------
+def gains_platforms(pin: BuildPin, kind: BuildKind, release: Release) -> bool:
+    """True if ``release`` now has an archive for a platform ``pin`` lacks.
+
+    A release can be missing an archive when the pin is made (still
+    uploading, or a failed build re-run later); its platform comes back once
+    the archive is there.  Platforms in ``skip`` stay out.
+    """
+    return any(
+        key not in pin.sha256
+        and key not in pin.skip
+        and PLATFORMS[key].asset in release.assets
+        for key in KIND_PLATFORMS[kind]
+    )
+
+
 def plan(line_json: LineJson, upstream: Upstream) -> List[Change]:
-    """A change for every pin that is behind, plus one for each new line."""
+    """A change for every pin that is behind or incomplete, plus new lines."""
     specs = line_json.lines
     supported = max(version_tuple(line) for line in specs)
 
@@ -400,7 +415,13 @@ def plan(line_json: LineJson, upstream: Upstream) -> List[Change]:
         for glibc_kind in KINDS:
             tag = newest[glibc_kind].get(line)
             pin = specs[line].pin(glibc_kind) if line in specs else None
-            if tag and (pin is None or tag != pin.version):
+            if not tag:
+                continue
+            if (
+                pin is None
+                or tag != pin.version
+                or gains_platforms(pin, glibc_kind, upstream[glibc_kind][tag])
+            ):
                 changes.append(Change(line=line, kind=glibc_kind, tag=tag))
 
     return changes
@@ -418,13 +439,32 @@ def apply(
             continue  # a line is defined by its official build
         pin = spec.pin(change.kind) if spec else None
         skip = pin.skip if pin else {}
-        wanted = [
-            key for key in KIND_PLATFORMS[change.kind] if key not in skip
+        # the same version gaining platforms: its pinned checksums (and the
+        # note on how they were established) stay exactly as they are
+        kept = pin if pin and pin.version == change.tag else None
+        wanted: List[PlatformKey] = [
+            key
+            for key in KIND_PLATFORMS[change.kind]
+            if key not in skip and not (kept and key in kept.sha256)
         ]
-        sha = checksums(upstream[change.kind][change.tag], wanted)
+        found = checksums(upstream[change.kind][change.tag], wanted)
+        merged: Dict[PlatformKey, str] = {
+            **(kept.sha256 if kept else {}),
+            **found,
+        }
+        sha: Dict[PlatformKey, str] = {
+            key: merged[key]
+            for key in KIND_PLATFORMS[change.kind]
+            if key in merged
+        }
         if not sha:
             continue
-        new_pin = BuildPin(version=change.tag, sha256=sha, skip=skip)
+        new_pin = BuildPin(
+            version=change.tag,
+            sha256=sha,
+            skip=skip,
+            note=kept.note if kept else None,
+        )
         if spec is None:
             specs[change.line] = LineSpec(official=new_pin)
         else:
