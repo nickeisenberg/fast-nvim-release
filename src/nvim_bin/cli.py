@@ -1,4 +1,4 @@
-"""Command line interface: ``nvim-bin setup | path | run``.
+"""Command line interface: ``nvim-bin setup | run``.
 
 This is the stable interface.  The package version (``0.12.6.1``) names the
 Neovim version inside, so it cannot announce breaking changes: commands and
@@ -29,9 +29,14 @@ def _version_text() -> str:
 
 
 def _on_path(directory: Path) -> bool:
-    wanted = os.path.normcase(str(directory))
+    """True if a ``PATH`` entry is ``directory``, also through symlinks."""
+
+    def real(path: str) -> str:
+        return os.path.normcase(os.path.realpath(path))
+
+    wanted = real(str(directory))
     return any(
-        entry and os.path.normcase(os.path.abspath(entry)) == wanted
+        entry and real(entry) == wanted
         for entry in os.environ.get("PATH", "").split(os.pathsep)
     )
 
@@ -50,19 +55,13 @@ def cmd_setup(prefix: str, force: bool) -> int:
                 "add it to PATH in System Properties > Environment Variables"
             )
         else:
-            hint = f'add it to PATH, e.g. in ~/.bashrc: export PATH="{exe.parent}:$PATH"'
+            hint = (
+                "add it in your shell's startup profile, e.g. "
+                f'export PATH="{exe.parent}:$PATH"'
+            )
         print(
             f"note: {exe.parent} is not on your PATH; {hint}", file=sys.stderr
         )
-    return 0
-
-
-def cmd_path(prefix: Optional[str]) -> int:
-    prefix_ = bundle.normalize(prefix) if prefix else bundle.default_prefix()
-    exe = prefix_ / "bin" / ("nvim.exe" if os.name == "nt" else "nvim")
-    if bundle.installed(prefix_) is None or not exe.is_file():
-        raise NvimBinError(f"{PROG} has not installed Neovim in {prefix_}")
-    print(exe)
     return 0
 
 
@@ -104,20 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument(
         "--force",
         action="store_true",
-        help="overwrite files not installed here",
+        help="replace what is already there: an earlier install, or "
+        "files not installed by nvim-bin",
     )
     setup.set_defaults(
         func=lambda parsed: cmd_setup(prefix=parsed.prefix, force=parsed.force)
     )
-
-    path = commands.add_parser(
-        "path", help="print the nvim this tool installed in a prefix"
-    )
-    path.add_argument(
-        "--prefix",
-        help=f"prefix to look in (default: {bundle.default_prefix()})",
-    )
-    path.set_defaults(func=lambda parsed: cmd_path(prefix=parsed.prefix))
 
     # `main` handles `run` itself so that nvim's own flags reach nvim; this
     # parser only puts the command into --help

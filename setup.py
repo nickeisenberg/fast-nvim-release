@@ -17,13 +17,9 @@ import re
 from pathlib import Path
 
 from setuptools import setup
+from setuptools.command.bdist_wheel import bdist_wheel
 from setuptools.command.sdist import sdist
 from setuptools.dist import Distribution
-
-try:  # setuptools >= 70.1 ships the command itself
-    from setuptools.command.bdist_wheel import bdist_wheel
-except ImportError:  # pragma: no cover - older toolchains
-    from wheel.bdist_wheel import bdist_wheel
 
 BUILD_JSON = (
     Path(__file__).resolve().parent

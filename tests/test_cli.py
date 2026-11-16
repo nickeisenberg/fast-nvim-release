@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from conftest import POSIX_ONLY
 
@@ -12,8 +14,14 @@ from nvim_bin.cli import main
 def test_no_arguments_prints_help(capsys):
     assert main([]) == 0
     out = capsys.readouterr().out
-    for command in ("setup", "path", "run"):
+    for command in ("setup", "run"):
         assert command in out
+
+
+def test_there_is_no_path_command(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["path"])
+    assert excinfo.value.code == 2
 
 
 def test_version_names_the_bundled_neovim(fake_bundle, host, capsys):
@@ -61,12 +69,28 @@ def test_setup_refuses_foreign_files_without_force(
     assert err.startswith("error: ") and "--force" in err
 
 
-def test_path(fake_bundle, host, prefix, capsys):
-    assert main(["path", "--prefix", str(prefix)]) == 1
-    assert "has not installed Neovim" in capsys.readouterr().err
-    bundle.install(prefix)
-    assert main(["path", "--prefix", str(prefix)]) == 0
-    assert capsys.readouterr().out.strip() == str(prefix / "bin" / host.exe)
+@POSIX_ONLY
+def test_setup_again_takes_force(fake_bundle, prefix, capsys):
+    assert main(["setup", "--prefix", str(prefix)]) == 0
+    assert main(["setup", "--prefix", str(prefix)]) == 1
+    err = capsys.readouterr().err
+    assert "already holds Neovim v0.12.6" in err and "--force" in err
+    assert main(["setup", "--prefix", str(prefix), "--force"]) == 0
+
+
+@POSIX_ONLY
+def test_a_symlinked_path_entry_counts_as_on_path(
+    fake_bundle, prefix, tmp_path, monkeypatch, capsys
+):
+    link = tmp_path / "link"
+    link.symlink_to(prefix, target_is_directory=True)
+    prefix.mkdir()
+    # the fake nvim is a shell script: it still needs the rest of PATH
+    monkeypatch.setenv(
+        "PATH", f"{link / 'bin'}{os.pathsep}{os.environ['PATH']}"
+    )
+    assert main(["setup", "--prefix", str(prefix)]) == 0
+    assert "not on your PATH" not in capsys.readouterr().err
 
 
 @pytest.fixture()

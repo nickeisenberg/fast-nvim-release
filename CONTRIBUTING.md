@@ -18,7 +18,7 @@ are pinned to commit SHAs with the tag in a comment; bump both together.
 
 ```
 lines.json                          the revision, and every Neovim line's pinned builds
-src/nvim_bin/cli.py                 setup / path / run  (the stable interface)
+src/nvim_bin/cli.py                 setup / run  (the stable interface)
 src/nvim_bin/bundle.py              the bundled build, installing into a prefix
 src/nvim_bin/platforms.py           platforms, wheel tags, which machine this is
 setup.py                            versions and tags the wheel from _nvim/build.json
@@ -73,6 +73,10 @@ old-glibc wheel, so the same two commands work there. Archives are cached in
 `~/.cache/nvim-bin` (`NVIM_BIN_CACHE_DIR`) and checked against
 `lines.json` every time. The `LICENSE.nvim-<line>.txt` files in `_nvim/` are
 tracked, because every wheel must ship its line's license (and only that one).
+A wheel from `pip install .` in the repository root therefore carries every
+line's license and fails `check`; only `release_tool build` (which builds in
+a copy holding just that line's license) makes wheels to validate and
+release.
 
 ## When Neovim ships a patch (or a new line)
 

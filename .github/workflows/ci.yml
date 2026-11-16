@@ -26,8 +26,8 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
       - name: install ruff
@@ -57,8 +57,8 @@ jobs:
           - os: macos-15-intel
             python: "3.12"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python }}
       - name: install test tooling
@@ -75,7 +75,7 @@ jobs:
       # building needs tarfile's extraction filters, which setup-python's
       # 3.9 on macOS/Windows (3.9.13) lacks; the wheels are py3-none either way,
       # and the smoke test below installs them into the matrix Python
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
       - name: install build tooling
@@ -91,9 +91,52 @@ jobs:
       - name: validate the wheels
         shell: bash
         run: python -m twine check dist/* && python -m release_tool check
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python }}
       - name: install them and use them
         shell: bash
         run: python -m release_tool smoke dist/*.whl
+      - name: keep the Linux x86_64 wheels for the RHEL 8 job
+        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.12'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-x86_64-wheels
+          path: dist/*x86_64*.whl
+          retention-days: 3
+
+  rhel8:
+    # what the README promises for older Linux: on glibc 2.28 with RHEL 8's
+    # own pip (20.2), "nvim-bin==<line>.*" picks the old-glibc wheel by itself
+    name: RHEL 8 picks the old-glibc wheel
+    needs: test
+    runs-on: ubuntu-24.04
+    container: rockylinux:8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-x86_64-wheels
+          path: dist
+      - name: install python39 (with its pip 20.2)
+        run: dnf install -y python39
+      - name: pip chooses among the wheels, as it would on PyPI
+        run: |
+          read -r line expected < <(python3.9 -c '
+          import sys; sys.path.insert(0, ".")
+          from release_tool.commands import lines
+          data = lines.load_line_json(); line = lines.newest_line(data)
+          tag = "manylinux_2_17_x86_64.manylinux2014_x86_64"
+          print(line, lines.find(line, tag, data).version)')
+          python3.9 -m venv /opt/venv
+          /opt/venv/bin/python -m pip --version
+          /opt/venv/bin/python -m pip install --no-index --find-links dist/ "nvim-bin==${line}.*"
+          installed="$(/opt/venv/bin/python -m pip show nvim-bin | sed -n 's/^Version: //p')"
+          echo "nvim-bin==${line}.* -> ${installed} (expected ${expected})"
+          test "${installed}" = "${expected}"
+        shell: bash
+      - name: setup and start it
+        run: |
+          /opt/venv/bin/nvim-bin setup --prefix /usr/local
+          nvim --version | head -1
+          nvim --headless -u NONE "+q"

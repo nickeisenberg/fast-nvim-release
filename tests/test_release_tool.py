@@ -690,3 +690,13 @@ def test_a_lagging_old_glibc_build_is_its_own_version():
         == f"0.12.6.{revision}"
     )
     assert lines.find("0.12", OLD_X86, data).version == f"0.12.5.{revision}"
+
+
+def test_extending_release_notes_never_lists_a_wheel_twice():
+    old = "Wheels:\n- `win_amd64`: Neovim v0.12.6\n"
+    new = "- `win_arm64`: Neovim v0.12.6"
+    assert (
+        release_notes.extended(old, ["- `win_amd64`: Neovim v0.12.6"]) is None
+    )
+    assert release_notes.extended(old, [new]) == old + new + "\n"
+    assert release_notes.extended(old + new + "\n", [new]) is None

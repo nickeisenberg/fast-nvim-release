@@ -104,8 +104,8 @@ $ uvx --from "nvim-bin==0.12.*" nvim-bin setup --prefix ~/opt/nvim-0.12
 $ ln -sf ~/opt/nvim-0.12/bin/nvim ~/.local/bin/nvim
 ```
 
-Nothing updates behind your back: run `setup` again when you want a newer
-patch.
+Nothing updates behind your back: to move a prefix to a newer patch, upgrade
+the package and run `setup --force` again.
 
 **Restricted or offline networks.** Only PyPI, or an internal PyPI mirror, is
 needed. For machines with no network at all, see
@@ -120,7 +120,7 @@ needed. For machines with no network at all, see
 | `0.12` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 "Linux" means glibc 2.34 or newer (Neovim's official builds); "Older Linux"
-means glibc 2.17 to 2.33 (RHEL 8, CentOS 7), with the builds Neovim publishes
+means glibc 2.17 to 2.33 (RHEL 8 and similar), with the builds Neovim publishes
 in [`neovim/neovim-releases`](https://github.com/neovim/neovim-releases). You
 never choose between them: pip installs the right one. macOS needs 11 or newer.
 
@@ -174,7 +174,6 @@ plans to drop a line: every line from 0.10 on keeps getting this tool's fixes.
 | Command | What it does |
 | --- | --- |
 | `nvim-bin setup --prefix DIR [--force]` | Install the bundled Neovim into `DIR` |
-| `nvim-bin path [--prefix DIR]` | Print the `nvim` this tool installed in `DIR` |
 | `nvim-bin run [--] [ARGS]` | Run the bundled nvim without installing it |
 | `nvim-bin --version` | This tool's version and the Neovim it carries |
 
@@ -188,21 +187,34 @@ Neovim layout:
 <prefix>/share/nvim-bin/              # records what was installed here
 ```
 
-A prefix holds one Neovim: `setup` from another version replaces it, so use
-separate prefixes to keep several. Files this tool did not install are never
-overwritten without `--force`, and other files in `<prefix>/bin` are left
-alone. If `<prefix>/bin` is not on `PATH`, `setup` says so.
+A prefix holds one Neovim, so use separate prefixes to keep several. `setup`
+never deletes or overwrites anything without `--force`: not an earlier
+install of its own (another version, or another machine's on a shared home
+directory), and not files from elsewhere. It lists what it would replace and
+stops. Other files in `<prefix>/bin` are always left alone. If `<prefix>/bin`
+is not on `PATH`, `setup` says so.
 
-`path` exits 1 when the prefix has no install, which makes it the check to use
-in scripts; without `--prefix` it looks in `~/.local` (on Windows,
-`%LOCALAPPDATA%\nvim-bin`). `run` hands everything after it to Neovim
-verbatim: `nvim-bin run -- -u NONE --headless "+q"`.
+`run` hands everything after it to Neovim verbatim:
+`nvim-bin run -- -u NONE --headless "+q"`.
+
+To uninstall, delete what `setup` put into the prefix:
+
+```console
+$ rm -r <prefix>/bin/nvim <prefix>/lib/nvim <prefix>/share/nvim/runtime <prefix>/share/nvim-bin
+```
+
+Do not delete `<prefix>/share/nvim` itself: with `--prefix ~/.local` that is
+also Neovim's data directory (`stdpath("data")`), where plugin managers keep
+your plugins. The other way round, resetting Neovim with
+`rm -rf ~/.local/share/nvim` also removes the runtime; run `setup --force`
+again afterwards.
 
 **Stability.** Since the version number names the Neovim inside, it cannot
 announce breaking changes in this tool. Instead, the command line is stable:
-the commands and flags above, the prefix layout and the exit codes (0 success,
-1 error, 2 bad usage) keep working. Commands and flags may be added, never
-removed or changed in meaning.
+the commands and flags above, the prefix layout, the exit codes (0 success,
+1 error, 2 bad usage) and the `--version` line keep working. Commands and
+flags may be added, never removed or changed in meaning. Everything else
+`setup` prints is for people and may change.
 
 ## Installing for other machines
 

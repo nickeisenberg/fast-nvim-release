@@ -17,10 +17,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Iterable, Optional, Set, Tuple, Union
+from typing import Iterable, List, Optional, Set, Tuple, Union
 
 from nvim_bin.platforms import PLATFORMS, Platform, host_platform
 
@@ -111,8 +112,14 @@ def bundled_exe() -> Path:
 # --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class InstallJson:
-    """``install.json``: what this tool put into a prefix, and what it owns."""
+    """``install.json``: what this tool put into a prefix, and what it owns.
 
+    A future revision tells marker layouts apart by ``package_version``: its
+    last number is the revision of this code that wrote the marker (markers
+    without it come from before the field existed).
+    """
+
+    package_version: Optional[str]  #: e.g. ``0.12.6.1``
     line: Optional[str]
     nvim_version: Optional[str]
     platform: str
@@ -124,22 +131,12 @@ def normalize(path: Union[str, os.PathLike]) -> Path:
     return Path(os.path.abspath(os.path.expanduser(os.fspath(path))))
 
 
-def default_prefix() -> Path:
-    """Where ``path`` looks when no ``--prefix`` is given (``setup`` has no default)."""
-    if os.name == "nt":
-        base = (
-            os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
-        )
-        return normalize(Path(base) / "nvim-bin")
-    return normalize(Path.home() / ".local")
-
-
 def installed(prefix: Path) -> Optional[InstallJson]:
     """What this tool installed into ``prefix``, or ``None`` if it manages nothing.
 
-    Only a marker this tool can read in full counts as an install: anything else
-    must not pass for one, or ``setup`` would treat a prefix it never managed as
-    its own and overwrite files there without ``--force``.
+    Only a marker this tool can read in full counts as an install: ``setup
+    --force`` deletes the ``bin`` entries a marker lists, so a damaged or
+    foreign file must not pass for one.
     """
     try:
         data = json.loads((prefix / MARKER).read_text(encoding="utf-8"))
@@ -149,9 +146,11 @@ def installed(prefix: Path) -> Optional[InstallJson]:
     if not isinstance(data, dict):
         return None
 
+    package_version = data.get("package_version")
     line, version = data.get("line"), data.get("nvim_version")
     if not all(
-        value is None or isinstance(value, str) for value in (line, version)
+        value is None or isinstance(value, str)
+        for value in (package_version, line, version)
     ):
         return None
 
@@ -164,7 +163,7 @@ def installed(prefix: Path) -> Optional[InstallJson]:
     ):
         return None
 
-    return InstallJson(line, version, platform, tuple(names))
+    return InstallJson(package_version, line, version, platform, tuple(names))
 
 
 def _owned_bin_names(prefix: Path) -> Set[str]:
@@ -199,6 +198,7 @@ def _write_marker(prefix: Path, bin_names: Iterable[str]) -> None:
     marker.parent.mkdir(parents=True, exist_ok=True)
     info = build_info()
     marker_info = InstallJson(
+        package_version=info.version if info else None,
         line=info.line if info else None,
         nvim_version=info.neovim if info else None,
         platform=bundled_platform().key,
@@ -212,42 +212,34 @@ def _write_marker(prefix: Path, bin_names: Iterable[str]) -> None:
 def install(prefix: Path, *, force: bool = False) -> Path:
     """Copy the bundled build into ``prefix`` and return the installed executable.
 
-    A prefix holds one Neovim: installing into a prefix this tool already
-    manages replaces the previous build, including the ``bin`` entries it
-    owned.  Anything else is never overwritten without ``force``.
+    A prefix holds one Neovim.  Replacing anything already there, an earlier
+    install of this tool included, deletes it for good, so it takes ``force``.
+    Other entries of ``<prefix>/bin`` are never touched.
     """
     exe = bundled_exe()
     source = exe.parent.parent
     prefix = normalize(prefix)
     names = sorted(entry.name for entry in (source / "bin").iterdir())
     owned = _owned_bin_names(prefix)
-    managed = installed(prefix) is not None
 
     if not force:
-        # Windows file names ignore case, and releases differ in how they spell
-        # the same DLL (dbghelp.dll vs DbgHelp.dll)
-        owned_keys = {os.path.normcase(name) for name in owned}
-        foreign = [
-            prefix / "bin" / name
-            for name in names
-            if os.path.normcase(name) not in owned_keys
-            and (
-                (prefix / "bin" / name).exists()
-                or (prefix / "bin" / name).is_symlink()
+        existing = _would_replace(prefix, names, owned)
+        if existing:
+            info = installed(prefix)
+            held = (
+                f"{prefix} already holds Neovim {info.nvim_version or '(unknown)'}"
+                f" ({info.platform}), installed by nvim-bin.\n"
+                if info
+                else ""
             )
-        ]
-        if not managed:
-            foreign += [
-                prefix / part for part in PARTS[1:] if (prefix / part).exists()
-            ]
-        if foreign:
             raise NvimBinError(
-                "not installed by nvim-bin, so not overwritten:\n  "
-                + "\n  ".join(str(path) for path in foreign)
+                f"{held}setup would replace:\n  "
+                + "\n  ".join(str(path) for path in existing)
                 + "\n  re-run with --force to replace them, or pick another --prefix"
             )
 
-    # claim everything first, so an interrupted install can be re-run without --force
+    # claim everything first, so an interrupted install leaves nothing
+    # behind that a re-run (with --force) would not clean up
     _write_marker(prefix, owned | set(names))
     for part in PARTS[1:]:
         _remove(prefix / part)
@@ -260,8 +252,33 @@ def install(prefix: Path, *, force: bool = False) -> Path:
     for name in names:
         _copy(source / "bin" / name, prefix / "bin" / name)
 
+    installed_exe = prefix / "bin" / exe.name
+    if os.name != "nt":
+        # not every installer keeps the executable bit of a wheel's files
+        mode = installed_exe.stat().st_mode
+        installed_exe.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
     _write_marker(prefix, names)
-    return prefix / "bin" / exe.name
+    return installed_exe
+
+
+def _exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+
+def _would_replace(
+    prefix: Path, names: Iterable[str], owned: Set[str]
+) -> List[Path]:
+    """Everything in ``prefix`` that an install would delete or overwrite."""
+    found = [prefix / MARKER] if _exists(prefix / MARKER) else []
+    found += [prefix / part for part in PARTS[1:] if _exists(prefix / part)]
+    seen = set()  # Windows file names ignore case: dbghelp.dll is DbgHelp.dll
+    for name in sorted(set(names) | owned):
+        path = prefix / "bin" / name
+        if os.path.normcase(name) not in seen and _exists(path):
+            seen.add(os.path.normcase(name))
+            found.append(path)
+    return found
 
 
 #: ``-i NONE`` keeps Neovim from reading and rewriting the user's shada file.
