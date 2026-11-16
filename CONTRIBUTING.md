@@ -23,14 +23,14 @@ src/nvim_bin/bundle.py              the bundled build, installing into a prefix
 src/nvim_bin/platforms.py           platforms, wheel tags, which machine this is
 setup.py                            versions and tags the wheel from _nvim/build.json
 release_tool/                       dev tooling, never in a wheel: python -m release_tool --help
+  __main__.py                       the entry point: the parser, every command registered
   gh_client.py                      GitHub: Neovim's release listings, and downloads
-  cli/main.py, cli/parser.py        the entry point, and every command registered
-  cli/commands/lines.py             lines.json and the wheels it describes; lines update / bump
-  cli/commands/fetch.py             download, verify and unpack one wheel's build
-  cli/commands/build.py             build any set of wheels (or only unpublished ones)
-  cli/commands/check.py             validate wheels against lines.json
-  cli/commands/smoke.py             install wheels in a clean venv and use them
-  cli/commands/release_notes.py     one GitHub release per published version
+  commands/lines.py                 lines.json and the wheels it describes; lines update / bump
+  commands/fetch.py                 download, verify and unpack one wheel's build
+  commands/build.py                 build any set of wheels (or only unpublished ones)
+  commands/check.py                 validate wheels against lines.json
+  commands/smoke.py                 install wheels in a clean venv and use them
+  commands/release_notes.py         one GitHub release per published version
 ```
 
 ## Versions and lines
