@@ -26,8 +26,8 @@ from typing import Dict, List, Set
 
 from nvim_bin.platforms import host_wheel_tag
 from release_tool import REPOROOT
-from release_tool.cli.commands import lines
-from release_tool.cli.commands.lines import WheelSpec
+from release_tool.commands import lines
+from release_tool.commands.lines import WheelSpec
 from release_tool.exceptions import ReleaseToolError
 
 NVIM = lines.NVIM_DIR.relative_to(REPOROOT)

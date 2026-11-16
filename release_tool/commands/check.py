@@ -22,7 +22,7 @@ from typing import List, Optional, Tuple, cast
 from nvim_bin.bundle import BuildJson
 from nvim_bin.platforms import WheelTag
 from release_tool import REPOROOT
-from release_tool.cli.commands import lines
+from release_tool.commands import lines
 from release_tool.exceptions import ReleaseToolError
 
 WHEEL_NAME = re.compile(

@@ -17,14 +17,14 @@ from conftest import POSIX_ONLY
 
 from nvim_bin.platforms import OLD_GLIBC_TAGS, PLATFORMS
 from release_tool import gh_client
-from release_tool.cli.commands import (
+from release_tool.__main__ import main
+from release_tool.commands import (
     build,
     check,
     fetch,
     lines,
     release_notes,
 )
-from release_tool.cli.main import main
 from release_tool.exceptions import ReleaseToolError
 
 LINUX = PLATFORMS["linux-x86_64"]

@@ -26,8 +26,8 @@ from pathlib import Path
 from nvim_bin.bundle import PARTS, BuildJson
 from nvim_bin.platforms import Platform, host_platform, host_wheel_tag
 from release_tool import gh_client
-from release_tool.cli.commands import lines
-from release_tool.cli.commands.lines import WheelSpec
+from release_tool.commands import lines
+from release_tool.commands.lines import WheelSpec
 from release_tool.exceptions import ReleaseToolError
 
 DEST = lines.NVIM_DIR
