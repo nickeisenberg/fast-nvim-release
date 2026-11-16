@@ -2,11 +2,10 @@
 
 Neovim from PyPI, in seconds, without root: pick a Neovim line with pip and get
 the official build for Linux (including RHEL 8-era systems), macOS or Windows,
-as a plain directory you put where you want. Made for CI, containers, fresh
-servers and machines without root, and just as handy on your own machine.
+as a plain directory you put where you want. Great for CI, containers, fresh
+servers and machines without root, and just as nice on your own machine.
 
-From nothing to a working `nvim`, in a fresh venv with a cold pip cache, takes
-3 to 4 seconds, of which `setup` itself is about 0.15:
+From nothing to a working `nvim` takes 3 to 4 seconds:
 
 ```console
 $ time bash -c 'python3 -m venv get-nvim && \
@@ -59,13 +58,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "nvim-bin==${{ matrix.nvim }}.*"
+
+      # either: run the bundled Neovim directly
+      - run: nvim-bin run -- --headless -c "PlenaryBustedDirectory tests"
+
+      # or: put `nvim` on PATH, for tests that call it themselves (a Makefile, a script)
       - run: nvim-bin setup --prefix ~/.local && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: nvim --headless -c "PlenaryBustedDirectory tests"
 ```
-
-Nothing here is specific to GitHub Actions: the same commands work in GitLab
-CI, Jenkins or anywhere else with a Python. `nvim-bin run [ARGS]`
-starts the bundled Neovim without the `setup` step.
 
 **Containers.** In a glibc-based image (Debian, Ubuntu, `python:*-slim`, RHEL
 and the like) you are usually root, so install straight into `/usr/local`:
@@ -75,12 +75,6 @@ $ docker exec -it mycontainer bash
 # pip install nvim-bin
 # nvim-bin setup --prefix /usr/local
 ```
-
-Images without Python need it first (`apt-get install python3-pip`; Debian's
-and Ubuntu's own pip then wants a venv, uvx, or `--break-system-packages`).
-Alpine has no Neovim build to ship (see [Platforms](#platforms)); use
-`apk add neovim` there. Plugin setups often also want `git`, a C compiler for
-Tree-sitter parsers and `ripgrep`, which slim images do not include.
 
 **No root or sudo.** Install for your user and put Neovim in `~/.local/bin`:
 
@@ -241,23 +235,11 @@ picks the matching wheel. Without Python on the target, unzip the wheel:
 
 ## Other ways to get Neovim
 
-Package managers update Neovim along with the rest of your system, and
-[bob](https://github.com/MordechaiHadad/bob) switches versions for you and
-handles nightly builds. nvim-bin does neither: you get pinned official
-builds from PyPI as plain directories, and you choose what goes on `PATH`.
-
-| Option | Root needed | Downloads from | Good fit |
-| --- | --- | --- | --- |
-| OS package manager (apt, dnf, Homebrew, winget, scoop, ...) | for apt/dnf | your distribution's or the tool's repositories | your own machine |
-| [bob](https://github.com/MordechaiHadad/bob) | no | GitHub | your own machine, switching versions, nightly |
-| Official tarball / AppImage | no | GitHub | any machine with GitHub access |
-| mise / asdf | no | usually GitHub | if you already manage tools with them |
-| Neovim setup actions for GitHub Actions | no | usually GitHub | GitHub Actions only |
-| nvim-bin | no | PyPI or a PyPI mirror | CI, containers, no root, fresh servers, restricted networks, managing versions yourself |
-
-Use something else for nightly builds or releases older than 0.10, on Alpine
-or another platform without a wheel, or when you want updates to arrive with
-the rest of your system.
+If you want Neovim to update along with the rest of your system, use your
+package manager. For nightly builds, or switching versions with one command,
+use [bob](https://github.com/MordechaiHadad/bob). nvim-bin is for when you
+want a pinned official build and PyPI is the easiest place to get it from.
+It starts at 0.10; for anything older, use Neovim's own release archives.
 
 ## Contributing
 
