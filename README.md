@@ -43,9 +43,7 @@ revision; see [How versions work](#how-versions-work).
 
 ## Use cases
 
-**Testing a plugin in CI against several Neovim versions.** This is what it was
-built for, in the CI of [iron.nvim](https://github.com/Vigemus/iron.nvim). The
-test command is an example; use your plugin's own.
+**Testing a Neovim plugin in CI against several Neovim versions.**
 
 ```yaml
 jobs:
