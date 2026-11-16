@@ -66,20 +66,20 @@ jobs:
       - name: build every wheel the index does not have
         id: build
         run: |
-          python scripts/build_wheels.py --all --skip-published "$INDEX_URL"
+          python -m release_tool build --all --skip-published "$INDEX_URL"
           if ls dist/*.whl >/dev/null 2>&1; then echo "built=true" >> "$GITHUB_OUTPUT"; else echo "built=false" >> "$GITHUB_OUTPUT"; fi
       - name: validate metadata, payloads and tags
         if: steps.build.outputs.built == 'true'
         run: |
           python -m twine check dist/*
-          python scripts/check_wheels.py
+          python -m release_tool check
       - name: install the Linux x86_64 wheels in a clean venv and use them
         if: steps.build.outputs.built == 'true'
         # either kind may be missing (only old-glibc wheels joining a version)
         run: |
           shopt -s nullglob
           wheels=(dist/*-manylinux_2_34_x86_64.whl dist/*-manylinux_2_17_x86_64.manylinux2014_x86_64.whl)
-          if [ ${#wheels[@]} -gt 0 ]; then python scripts/smoke_test.py "${wheels[@]}"; fi
+          if [ ${#wheels[@]} -gt 0 ]; then python -m release_tool smoke "${wheels[@]}"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.build.outputs.built == 'true'
         with:
@@ -111,7 +111,7 @@ jobs:
           name: wheels
           path: dist
       - name: validate the wheels before uploading
-        run: python scripts/check_wheels.py dist/*.whl
+        run: python -m release_tool check dist/*.whl
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: ${{ inputs.index == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
@@ -138,4 +138,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: python3 scripts/release_notes.py dist/*.whl
+        run: python3 -m release_tool release-notes dist/*.whl

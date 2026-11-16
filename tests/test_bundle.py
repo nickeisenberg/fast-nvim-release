@@ -32,7 +32,7 @@ def test_build_info_and_exe(fake_bundle, host):
 def test_a_package_built_without_neovim_says_so(tmp_path, monkeypatch):
     monkeypatch.setattr(bundle, "BUNDLE_ROOT", tmp_path / "empty")
     assert bundle.build_info() is None
-    with pytest.raises(bundle.NvimBinError, match=r"fetch_nvim\.py"):
+    with pytest.raises(bundle.NvimBinError, match=r"release_tool fetch"):
         bundle.bundled_exe()
 
 

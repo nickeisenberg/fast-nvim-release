@@ -28,7 +28,7 @@ parsers, Lua libraries, syntax files and colorschemes, and on Windows the
 Their licenses are documented by the Neovim project in the `doc/` tree of the
 runtime and in the upstream repositories of those components.
 
-No changes are made to the vendored binaries: `scripts/fetch_nvim.py` extracts
+No changes are made to the vendored binaries: `python -m release_tool fetch` extracts
 `bin/`, `lib/nvim/` and `share/nvim/runtime/` from each published archive.
 
 ## nvim-bin itself

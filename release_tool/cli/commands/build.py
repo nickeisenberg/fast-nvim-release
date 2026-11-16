@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 """Build the wheels described by ``lines.json``.
 
-    python scripts/build_wheels.py --all
-    python scripts/build_wheels.py --line 0.12 --wheel host
-    python scripts/build_wheels.py --all --skip-published https://test.pypi.org
+    python -m release_tool build --all
+    python -m release_tool build --line 0.12 --wheel host
+    python -m release_tool build --all --skip-published https://test.pypi.org
 
 Each wheel is built in a throwaway copy of the source tree, so builds never mix
 and the repo's own ``_nvim`` directory is left alone.  ``--skip-published``
@@ -25,12 +24,13 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Set
 
-import lines
-from lines import Wheel
-
 from nvim_bin.platforms import host_wheel_tag
+from release_tool import REPOROOT
+from release_tool.cli.commands import lines
+from release_tool.cli.commands.lines import WheelSpec
+from release_tool.exceptions import ReleaseToolError
 
-NVIM = lines.NVIM_DIR.relative_to(lines.REPOROOT)
+NVIM = lines.NVIM_DIR.relative_to(REPOROOT)
 IGNORE = shutil.ignore_patterns(
     "_nvim",
     ".git",
@@ -59,7 +59,7 @@ def published(index: str, version: str) -> Set[str]:
 
 def select(
     line_names: List[str], tags: List[str], skip_published: str = ""
-) -> List[Wheel]:
+) -> List[WheelSpec]:
     host = host_wheel_tag()
     wanted_tags = {host if tag == "host" else tag for tag in tags}
     chosen = [
@@ -80,24 +80,27 @@ def select(
     return chosen
 
 
-def build(wheel: Wheel, outdir: Path) -> Path:
+def build(wheel: WheelSpec, outdir: Path) -> Path:
     print(f"==> {wheel.label}", flush=True)
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "src-tree"
-        shutil.copytree(lines.REPOROOT, work, ignore=IGNORE)
+        shutil.copytree(REPOROOT, work, ignore=IGNORE)
         (work / NVIM).mkdir()
         license_file = lines.NVIM_DIR / lines.license_name(wheel.line)
-        if license_file.is_file():  # else fetch_nvim.py downloads it
+        if license_file.is_file():  # else fetch says it is missing
             shutil.copy2(license_file, work / NVIM / license_file.name)
-        fetch = [
+        # the copy's own release_tool, so the build lands in the copy
+        fetch_cmd = [
             sys.executable,
-            "scripts/fetch_nvim.py",
+            "-m",
+            "release_tool",
+            "fetch",
             "--line",
             wheel.line,
             "--wheel",
             wheel.tag,
         ]
-        subprocess.run(fetch, cwd=work, check=True)
+        subprocess.run(fetch_cmd, cwd=work, check=True)
         built = Path(tmp) / "dist"
         cmd = [
             sys.executable,
@@ -113,30 +116,52 @@ def build(wheel: Wheel, outdir: Path) -> Path:
         return Path(shutil.move(str(result), str(outdir / result.name)))
 
 
-def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--all", action="store_true", help="every line and wheel"
+# --------------------------------------------------------------------------
+# the command
+# --------------------------------------------------------------------------
+def register(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "build", help="Build wheels from the pinned builds."
     )
     parser.add_argument(
-        "--line", action="append", default=[], help="a line, e.g. 0.12"
+        "--all", action="store_true", help="Every wheel of every line."
     )
     parser.add_argument(
-        "--wheel", action="append", default=[], help='a wheel tag, or "host"'
+        "--line",
+        action="append",
+        default=[],
+        help="Only this line, e.g. 0.12 (repeatable).",
     )
-    parser.add_argument("--skip-published", default="", metavar="INDEX_URL")
-    parser.add_argument("--outdir", type=Path, default=lines.REPOROOT / "dist")
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--wheel",
+        action="append",
+        default=[],
+        metavar="TAG",
+        help='Only this platform tag, or "host" (repeatable).',
+    )
+    parser.add_argument(
+        "--skip-published",
+        default="",
+        metavar="INDEX_URL",
+        help="Skip wheels that index already has, e.g. https://pypi.org.",
+    )
+    parser.add_argument(
+        "--outdir",
+        type=Path,
+        default=REPOROOT / "dist",
+        metavar="DIR",
+        help="Where to put the wheels (default: dist).",
+    )
+    parser.set_defaults(func=run)
+
+
+def run(args: argparse.Namespace) -> None:
+    # building everything is never the default: it is 20 wheels
     if not (args.all or args.line or args.wheel):
-        parser.error("pass --all, or --line/--wheel")
+        raise ReleaseToolError("pass --all, or --line/--wheel")
     chosen = select(args.line, args.wheel, args.skip_published)
     if not chosen:
         print("nothing to build")
-        return 0
+        return
     for wheel in chosen:
         print(f"    {build(wheel, args.outdir).name}", flush=True)
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

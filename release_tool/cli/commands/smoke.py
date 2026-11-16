@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 """Install built wheels into a clean venv and use them like a user would.
 
-    python scripts/smoke_test.py WHEEL [WHEEL...]
+    python -m release_tool smoke WHEEL [WHEEL...]
 
 For each wheel (it must run on this machine): ``--version``, ``run``,
 ``setup`` and ``path``, and the installed nvim must report the Neovim version
@@ -10,20 +9,22 @@ the wheel's ``build.json`` names.
 
 from __future__ import annotations
 
-import json
+import argparse
 import os
 import subprocess
-import sys
 import tempfile
 import venv
 import zipfile
 from pathlib import Path
 
+from nvim_bin.bundle import BuildJson
+from release_tool.exceptions import ReleaseToolError
+
 #: a user's $VIMRUNTIME must not decide whether the smoke test passes
 ENV = {k: v for k, v in os.environ.items() if k not in ("VIMRUNTIME", "VIM")}
 
 
-def run(*cmd, ok: bool = True) -> str:
+def execute(*cmd, ok: bool = True) -> str:
     print("$", *cmd, flush=True)
     result = subprocess.run(
         [str(part) for part in cmd],
@@ -33,7 +34,7 @@ def run(*cmd, ok: bool = True) -> str:
         env=ENV,
     )
     if (result.returncode == 0) != ok:
-        raise SystemExit(
+        raise ReleaseToolError(
             f"FAILED (exit {result.returncode}):\n{result.stdout}{result.stderr}"
         )
     return result.stdout + result.stderr
@@ -41,8 +42,8 @@ def run(*cmd, ok: bool = True) -> str:
 
 def smoke(wheel: Path) -> None:
     with zipfile.ZipFile(wheel) as zf:
-        info = json.loads(zf.read("nvim_bin/_nvim/build.json"))
-    neovim, version = info["neovim"], info["version"]
+        info = BuildJson.loads(zf.read("nvim_bin/_nvim/build.json"))
+    neovim, version = info.neovim, info.version
     exe = "nvim.exe" if os.name == "nt" else "nvim"
     with tempfile.TemporaryDirectory(prefix="nvim-bin-smoke-") as tmp:
         work = Path(tmp)
@@ -53,30 +54,39 @@ def smoke(wheel: Path) -> None:
             scripts / f"python{suffix}",
             scripts / f"nvim-bin{suffix}",
         )
-        run(python, "-m", "pip", "install", "--no-deps", "-q", wheel)
+        execute(python, "-m", "pip", "install", "--no-deps", "-q", wheel)
 
-        out = run(cli, "--version")
+        out = execute(cli, "--version")
         assert version in out and neovim in out, out
-        assert neovim in run(cli, "run", "--", "--version").splitlines()[0]
-        run(cli, "setup", ok=False)  # --prefix is required
+        assert neovim in execute(cli, "run", "--", "--version").splitlines()[0]
+        execute(cli, "setup", ok=False)  # --prefix is required
         prefix = work / "prefix"
-        run(cli, "setup", "--prefix", prefix)
-        assert neovim in run(prefix / "bin" / exe, "--version").splitlines()[0]
-        assert str(prefix) in run(cli, "path", "--prefix", prefix)
+        execute(cli, "setup", "--prefix", prefix)
+        assert (
+            neovim
+            in execute(prefix / "bin" / exe, "--version").splitlines()[0]
+        )
+        assert str(prefix) in execute(cli, "path", "--prefix", prefix)
     print(f"PASS {wheel.name} (Neovim {neovim})")
 
 
-def main(argv=None) -> int:
-    wheels = [
-        Path(name).resolve()
-        for name in (sys.argv[1:] if argv is None else argv)
-    ]
-    if not wheels:
-        raise SystemExit("usage: smoke_test.py WHEEL [WHEEL...]")
-    for wheel in wheels:
-        smoke(wheel)
-    return 0
+# --------------------------------------------------------------------------
+# the command
+# --------------------------------------------------------------------------
+def register(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "smoke", help="Install built wheels in a clean venv and run them."
+    )
+    parser.add_argument(
+        "wheels",
+        nargs="+",
+        type=Path,
+        metavar="WHEEL",
+        help="Wheels that run on this machine.",
+    )
+    parser.set_defaults(func=run)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def run(args: argparse.Namespace) -> None:
+    for wheel in args.wheels:
+        smoke(wheel.resolve())

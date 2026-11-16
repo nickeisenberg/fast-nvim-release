@@ -35,11 +35,34 @@ MARKER = Path("share") / "nvim-bin" / "install.json"
 
 @dataclass(frozen=True)
 class BuildJson:
-    version: str
-    line: str
-    neovim: str
-    platform: str
-    tag: str
+    """``_nvim/build.json``: which build a wheel carries."""
+
+    version: str  #: the package version, e.g. ``0.12.6.1``
+    line: str  #: e.g. ``0.12``
+    neovim: str  #: the Neovim release, e.g. ``v0.12.6``
+    platform: str  #: the platform key, e.g. ``linux-x86_64``
+    tag: str  #: the wheel's platform tag
+
+    @classmethod
+    def from_dict(cls, data: object) -> BuildJson:
+        """``ValueError`` unless ``data`` has every field, each a string."""
+        if not isinstance(data, dict):
+            raise ValueError("build.json is not a JSON object")
+        names = [field.name for field in fields(cls)]
+        missing = [
+            name for name in names if not isinstance(data.get(name), str)
+        ]
+        if missing:
+            raise ValueError(f"build.json lacks {', '.join(missing)}")
+        return cls(*(data[name] for name in names))
+
+    @classmethod
+    def loads(cls, text: Union[str, bytes]) -> BuildJson:
+        """Parse ``build.json``; ``ValueError`` if it is malformed."""
+        return cls.from_dict(json.loads(text))
+
+    def dumps(self) -> str:
+        return json.dumps(asdict(self), indent=2) + "\n"
 
 
 class NvimBinError(RuntimeError):
@@ -52,17 +75,11 @@ class NvimBinError(RuntimeError):
 def build_info() -> Optional[BuildJson]:
     """``build.json``, or ``None`` when this installation carries no build."""
     try:
-        data = json.loads(
+        return BuildJson.loads(
             (BUNDLE_ROOT / "build.json").read_text(encoding="utf-8")
         )
     except (OSError, ValueError):
         return None
-    if not isinstance(data, dict):
-        return None
-    names = [field.name for field in fields(BuildJson)]
-    if not all(isinstance(data.get(name), str) for name in names):
-        return None
-    return BuildJson(*(data[name] for name in names))
 
 
 def bundled_platform() -> Platform:
@@ -84,7 +101,7 @@ def bundled_exe() -> Path:
     if not exe.is_file():
         raise NvimBinError(
             "this installation carries no Neovim build "
-            "(built from source without running scripts/fetch_nvim.py first?)"
+            "(built from source without running python -m release_tool fetch first?)"
         )
     return exe
 

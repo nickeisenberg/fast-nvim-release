@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 """Validate built wheels against ``lines.json`` before they are uploaded.
 
-    python scripts/check_wheels.py [dist/*.whl]
+    python -m release_tool check [dist/*.whl]
 
 A wheel ``nvim_bin-<neovim>.<revision>-py3-none-<tag>.whl`` must carry
 exactly the build ``lines.json`` pins for that line and tag, that Neovim
@@ -14,17 +13,17 @@ requirement must fit the tag, or pip would install a wheel that cannot start.
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import struct
-import sys
 import zipfile
 from pathlib import Path
 from typing import List, Optional, Tuple, cast
 
-import lines
-
+from nvim_bin.bundle import BuildJson
 from nvim_bin.platforms import WheelTag
+from release_tool import REPOROOT
+from release_tool.cli.commands import lines
+from release_tool.exceptions import ReleaseToolError
 
 WHEEL_NAME = re.compile(
     r"^nvim_bin-(?P<line>\d+\.\d+)\.(?P<patch>\d+)\.(?P<revision>\d+)"
@@ -120,16 +119,25 @@ def check(path: Path, data: Optional[lines.LineJson] = None) -> List[str]:
     with zipfile.ZipFile(path) as wheel:
         names = set(wheel.namelist())
         info_name = f"{PAYLOAD}build.json"
-        info = json.loads(wheel.read(info_name)) if info_name in names else {}
-        expected = {
-            "version": spec.version,
-            "line": line,
-            "neovim": spec.neovim,
-            "platform": spec.platform.key,
-            "tag": tag,
-        }
-        if info != expected:
-            problems.append(f"build.json is {info}, expected {expected}")
+        expected = BuildJson(
+            version=spec.version,
+            line=line,
+            neovim=spec.neovim,
+            platform=spec.platform.key,
+            tag=tag,
+        )
+        if info_name not in names:
+            problems.append(f"missing {info_name}")
+        else:
+            try:
+                info = BuildJson.loads(wheel.read(info_name))
+            except ValueError as exc:
+                problems.append(str(exc))
+            else:
+                if info != expected:
+                    problems.append(
+                        f"build.json is {info}, expected {expected}"
+                    )
         exe = f"{PAYLOAD}bin/{spec.platform.exe}"
         runtime = sum(
             1
@@ -197,15 +205,27 @@ def check(path: Path, data: Optional[lines.LineJson] = None) -> List[str]:
     return problems
 
 
-def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "wheels", nargs="*", type=Path, help="default: dist/*.whl"
+# --------------------------------------------------------------------------
+# the command
+# --------------------------------------------------------------------------
+def register(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "check", help="Validate built wheels against lines.json."
     )
-    args = parser.parse_args(argv)
-    wheels = args.wheels or sorted((lines.REPOROOT / "dist").glob("*.whl"))
+    parser.add_argument(
+        "wheels",
+        nargs="*",
+        type=Path,
+        metavar="WHEEL",
+        help="Wheel files (default: dist/*.whl).",
+    )
+    parser.set_defaults(func=run)
+
+
+def run(args: argparse.Namespace) -> None:
+    wheels = args.wheels or sorted((REPOROOT / "dist").glob("*.whl"))
     if not wheels:
-        parser.error("no wheels given and none in dist/")
+        raise ReleaseToolError("no wheels given and none in dist/")
     data = lines.load_line_json()
     failed = 0
     for wheel in wheels:
@@ -214,8 +234,5 @@ def main(argv=None) -> int:
         for problem in problems:
             print(f"  - {problem}")
         failed += bool(problems)
-    return 1 if failed else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    if failed:
+        raise ReleaseToolError(f"{failed} of {len(wheels)} wheels failed")

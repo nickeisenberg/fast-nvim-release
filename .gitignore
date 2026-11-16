@@ -1,4 +1,4 @@
-# vendored Neovim builds (created by scripts/fetch_nvim.py)
+# vendored Neovim builds (created by python -m release_tool fetch)
 src/nvim_bin/_nvim/*
 !src/nvim_bin/_nvim/.gitkeep
 # Neovim's license travels with every wheel, so it is tracked in git:

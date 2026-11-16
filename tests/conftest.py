@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-for path in (ROOT / "src", ROOT / "scripts"):
+for path in (ROOT / "src", ROOT):  # nvim_bin, release_tool
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

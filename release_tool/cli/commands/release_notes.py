@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 """Create or extend one GitHub release per package version among the given wheels.
 
-    python scripts/release_notes.py dist/*.whl [--dry-run]
+    python -m release_tool release-notes [--dry-run] dist/*.whl
 
 Each release is tagged ``v<version>`` (``v0.12.6.1``) and lists, per wheel, the
 Neovim build inside.  When wheels are added to a version that already has a
@@ -12,14 +11,15 @@ does that).
 
 from __future__ import annotations
 
+import argparse
 import collections
-import json
 import os
 import subprocess
-import sys
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional
+
+from nvim_bin.bundle import BuildJson
 
 
 def entries(wheels: List[Path]) -> Dict[str, List[str]]:
@@ -27,10 +27,8 @@ def entries(wheels: List[Path]) -> Dict[str, List[str]]:
     found = collections.defaultdict(list)
     for wheel in sorted(wheels):
         with zipfile.ZipFile(wheel) as zf:
-            info = json.loads(zf.read("nvim_bin/_nvim/build.json"))
-        found[info["version"]].append(
-            f"- `{info['tag']}`: Neovim {info['neovim']}"
-        )
+            info = BuildJson.loads(zf.read("nvim_bin/_nvim/build.json"))
+        found[info.version].append(f"- `{info.tag}`: Neovim {info.neovim}")
     return dict(found)
 
 
@@ -61,13 +59,33 @@ def existing_notes(tag: str) -> Optional[str]:
     return result.stdout if result.returncode == 0 else None
 
 
-def main(argv=None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    dry_run = "--dry-run" in args
-    wheels = [Path(arg) for arg in args if arg != "--dry-run"]
-    for version, items in entries(wheels).items():
+# --------------------------------------------------------------------------
+# the command
+# --------------------------------------------------------------------------
+def register(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "release-notes",
+        help="Create or extend nvim-bin's GitHub releases for these wheels.",
+    )
+    parser.add_argument(
+        "wheels",
+        nargs="+",
+        type=Path,
+        metavar="WHEEL",
+        help="The wheels just published.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the notes; do not call gh.",
+    )
+    parser.set_defaults(func=run)
+
+
+def run(args: argparse.Namespace) -> None:
+    for version, items in entries(args.wheels).items():
         tag = f"v{version}"
-        if dry_run:
+        if args.dry_run:
             print(f"--- {tag}\n{body(version, items)}")
             continue
         old = existing_notes(tag)
@@ -93,8 +111,3 @@ def main(argv=None) -> int:
                 old.rstrip("\n") + "\n" + "\n".join(items) + "\n",
             ]
         subprocess.run(cmd, check=True)
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -2,7 +2,7 @@ name: upstream
 
 # Neovim ships patch releases every few weeks (and its glibc 2.17 builds in
 # neovim-releases follow later), and nothing else here would notice. Every
-# Monday this runs `scripts/pins.py update`: pins move to the newest patches,
+# Monday this runs `python -m release_tool lines update`: pins move to the newest patches,
 # with the checksums GitHub publishes (a new patch is a new package version;
 # the revision stays). Any change becomes a pull request (branch pins/update)
 # with CI started on it; merging it and running the release workflow publishes
@@ -36,7 +36,7 @@ jobs:
           python-version: "3.12"
       # standard library only: nothing to install
       - name: move the pins to the newest patches
-        run: python scripts/pins.py update
+        run: python -m release_tool lines update
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: open (or refresh) the pull request

@@ -7,7 +7,7 @@ older systems such as RHEL 8, the builds Neovim publishes in
 machine can run.
 
 Which Neovim versions exist, and their checksums, is build-time data: see
-``lines.json`` and ``scripts/lines.py``.
+``lines.json`` and ``release_tool``.
 """
 
 from __future__ import annotations

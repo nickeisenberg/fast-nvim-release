@@ -1,12 +1,12 @@
 """Build hook: version and tag the wheel from the Neovim build it carries.
 
-``scripts/fetch_nvim.py`` unpacks one Neovim build into
+``python -m release_tool fetch`` unpacks one Neovim build into
 ``src/nvim_bin/_nvim/`` and records it in ``_nvim/build.json``: the
 package version (``<neovim>.<revision>``, e.g. ``0.12.6.1``) and the wheel's
 platform tag.
-This file reads both from there, so ``fetch_nvim.py`` then ``pip install .``
+This file reads both from there, so ``fetch`` then ``pip install .``
 (or ``python -m build``) always produces a consistent wheel.
-``scripts/check_wheels.py`` verifies the result against ``lines.json``.
+``python -m release_tool check`` verifies the result against ``lines.json``.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class PlatformWheel(bdist_wheel):
     def run(self):
         if not build_info():
             raise SystemExit(
-                f"no Neovim build in {BUILD_JSON.parent}; run scripts/fetch_nvim.py"
+                f"no Neovim build in {BUILD_JSON.parent}; run python -m release_tool fetch"
             )
         super().run()
 
