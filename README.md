@@ -30,6 +30,8 @@ $ pip install "nvim-bin==0.11.7.*"   # exactly Neovim v0.11.7
 $ nvim-bin setup --prefix ~/.local
 installed Neovim v0.12.6 into /home/you/.local
   /home/you/.local/bin/nvim
+$ ~/.local/bin/nvim --verion | head -1
+NVIM v0.12.6
 ```
 
 `pipx install` and `uv tool install` work the same way, and so does uvx in one
